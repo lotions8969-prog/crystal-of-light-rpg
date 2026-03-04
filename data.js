@@ -1,0 +1,113 @@
+const GAME_DATA = {
+  spells: {
+    fire:     { name: 'ファイア',   mpCost: 4,  damage: [18, 28],   type: 'magic', learnLevel: 1  },
+    blaze:    { name: 'ブレイズ',   mpCost: 9,  damage: [42, 62],   type: 'magic', learnLevel: 7  },
+    inferno:  { name: 'インフェルノ',mpCost: 18, damage: [80, 120],  type: 'magic', learnLevel: 14 },
+    thunder:  { name: 'サンダー',   mpCost: 13, damage: [48, 72],   type: 'magic', learnLevel: 11 },
+    heal:     { name: 'ヒール',     mpCost: 5,  heal:   [30, 45],   type: 'heal',  learnLevel: 1  },
+    healmore: { name: 'ヒールモア', mpCost: 11, heal:   [75, 110],  type: 'heal',  learnLevel: 8  },
+    barrier:  { name: 'バリア',     mpCost: 6,  buffStat:'def', buffAmount:12, buffTurns:3, type:'buff', learnLevel: 5 },
+  },
+  spellLevelUp: [
+    { level: 1,  spells: ['fire', 'heal'] },
+    { level: 5,  spells: ['barrier'] },
+    { level: 7,  spells: ['blaze'] },
+    { level: 8,  spells: ['healmore'] },
+    { level: 11, spells: ['thunder'] },
+    { level: 14, spells: ['inferno'] },
+  ],
+  items: {
+    potion:   { name: 'ポーション',    type: 'heal',    healAmount: 35,  price: 30,  desc: 'HPを35回復する。' },
+    hiPotion: { name: 'ハイポーション', type: 'heal',    healAmount: 100, price: 80,  desc: 'HPを100回復する。' },
+    elixir:   { name: 'エリクサー',    type: 'healFull',                 price: 300, desc: 'HPを全回復する。' },
+    ether:    { name: 'エーテル',      type: 'healMP',  healAmount: 25,  price: 50,  desc: 'MPを25回復する。' },
+    antidote: { name: '解毒薬',        type: 'cure',    cureStatus:'poison', price: 20, desc: '毒を治す。' },
+  },
+  weapons: {
+    bronzeSword: { name: '青銅の剣', atk: 8,  price: 150, desc: '攻撃力+8。',  where:'shop' },
+    ironSword:   { name: '鉄の剣',   atk: 18, price: 0,   desc: '攻撃力+18。', where:'cave' },
+    legendBlade: { name: '伝説の剣', atk: 35, price: 0,   desc: '攻撃力+35。', where:'castle' },
+  },
+  armors: {
+    leatherArmor: { name: '革の鎧',       def: 6,  price: 100, desc: '防御力+6。',  where:'shop' },
+    chainMail:    { name: 'チェインメイル', def: 14, price: 0,   desc: '防御力+14。', where:'cave' },
+    dragonMail:   { name: 'ドラゴンメイル', def: 28, price: 0,   desc: '防御力+28。', where:'castle' },
+  },
+  monsters: {
+    slime:      { name:'スライム',    hp:18,  atk:7,  def:3,  spd:8,  exp:12,  gold:6,   emoji:'🟢', color:'#4CAF50', actions:['attack','attack','attack'] },
+    goblin:     { name:'ゴブリン',    hp:28,  atk:11, def:6,  spd:10, exp:22,  gold:10,  emoji:'👺', color:'#8BC34A', actions:['attack','attack','attack'] },
+    wyvern:     { name:'ワイバーン', hp:42,  atk:16, def:8,  spd:14, exp:38,  gold:18,  emoji:'🐉', color:'#FF9800', actions:['attack','attack','breath'] },
+    forestTroll:{ name:'フォレストトロール', hp:130, atk:24, def:12, spd:8, exp:200, gold:80, emoji:'👹', color:'#33691E', isBoss:true, actions:['attack','attack','smash','regen'] },
+
+    skeleton:  { name:'スケルトン',   hp:52,  atk:20, def:14, spd:9,  exp:52,  gold:26,  emoji:'💀', color:'#ECEFF1', actions:['attack','attack','attack'] },
+    caveBat:   { name:'ケイブバット', hp:38,  atk:16, def:10, spd:18, exp:42,  gold:20,  emoji:'🦇', color:'#7C4DFF', actions:['attack','attack','poison'] },
+    darkMage:  { name:'ダークメイジ', hp:58,  atk:26, def:12, spd:13, exp:68,  gold:36,  emoji:'🧙', color:'#3F51B5', actions:['attack','magic','magic'] },
+    caveDragon:{ name:'ケイブドラゴン', hp:320, atk:40, def:22, spd:12, exp:550, gold:200, emoji:'🐲', color:'#D32F2F', isBoss:true, actions:['attack','breath','breath','tailSwipe'], phase2Trigger:160 },
+
+    darkKnight:{ name:'ダークナイト', hp:96,  atk:44, def:28, spd:15, exp:125, gold:62,  emoji:'⚔️', color:'#455A64', actions:['attack','attack','charge'] },
+    demon:     { name:'デーモン',     hp:112, atk:50, def:22, spd:16, exp:150, gold:72,  emoji:'😈', color:'#880E4F', actions:['attack','magic','roar'] },
+    archDemon: { name:'アーチデーモン',hp:135, atk:56, def:26, spd:18, exp:175, gold:88,  emoji:'👿', color:'#B71C1C', actions:['attack','magic','magic','drain'] },
+    demonKing: { name:'魔王ゾルディアーク', hp:850, atk:78, def:42, spd:20, exp:9999, gold:9999, emoji:'👑', color:'#1a0020', isBoss:true, actions:['attack','attack','darkBlast','darkBlast','drain','rage'], phase2Trigger:425 },
+  },
+  areas: {
+    village: { name:'エルフィア村', type:'town',    emoji:'🏘️', music:'town',  desc:'平和な村。旅の出発点。', locked:false },
+    forest:  { name:'翠の森',       type:'dungeon', emoji:'🌲', music:'field', desc:'緑豊かな森。魔物が出没する。', locked:false, monsters:['slime','goblin','wyvern'], boss:'forestTroll', rooms:5, bossDefeated:false, encounterRate:0.35,
+      treasures:[{item:'potion',count:2,room:2,found:false},{item:'ether',count:1,room:4,found:false}] },
+    cave:   { name:'黒岩の洞窟',    type:'dungeon', emoji:'⛰️', music:'field', desc:'暗く険しい洞窟。強敵が待つ。', locked:true, monsters:['skeleton','caveBat','darkMage'], boss:'caveDragon', rooms:6, bossDefeated:false, encounterRate:0.40,
+      treasures:[{weaponId:'ironSword',room:2,found:false},{armorId:'chainMail',room:4,found:false},{item:'hiPotion',count:2,room:5,found:false}] },
+    castle: { name:'魔王城',        type:'dungeon', emoji:'🏰', music:'field', desc:'魔王の城。最後の決戦の地。', locked:true, monsters:['darkKnight','demon','archDemon'], boss:'demonKing', rooms:8, bossDefeated:false, encounterRate:0.45,
+      treasures:[{weaponId:'legendBlade',room:3,found:false},{armorId:'dragonMail',room:6,found:false},{item:'elixir',count:1,room:7,found:false}] },
+  },
+  story: {
+    intro: [
+      { speaker:'ナレーター', text:'遠い昔、世界は「光のクリスタル」の加護によって守られていた。' },
+      { speaker:'ナレーター', text:'しかし今から七日前、魔王ゾルディアークがクリスタルを奪い去り、世界に闇が満ちてきた。' },
+      { speaker:'長老カルタス', text:'目を覚ましたか、若者よ。世界の危機が迫っておる。' },
+      { speaker:'長老カルタス', text:'魔王が光のクリスタルを奪い去った。このままでは世界は闇に沈む。' },
+      { speaker:'長老カルタス', text:'選ばれし勇者よ、クリスタルを取り戻してくれ。' },
+      { speaker:'長老カルタス', text:'北の翠の森を抜け、黒岩の洞窟を越えれば魔王城に着くだろう。' },
+      { speaker:'長老カルタス', text:'まずは村の店で装備を整えてから旅立つがよい。健闘を祈る！' },
+    ],
+    forestBoss: [
+      { speaker:'ナレーター', text:'森の最奥。大地が揺れ、巨大な影が現れた！' },
+      { speaker:'フォレストトロール', text:'ガアアアァ！この森に踏み込むとは命知らずな人間め！' },
+      { speaker:'勇者', text:'退け！魔王城への道を開けてもらう！' },
+      { speaker:'フォレストトロール', text:'うぬ...この儂を倒せるというか！かかってこい！' },
+    ],
+    forestClear: [
+      { speaker:'ナレーター', text:'フォレストトロールが轟音とともに倒れた！森に光が戻る。' },
+      { speaker:'勇者', text:'先に進める。次は黒岩の洞窟だ。' },
+    ],
+    caveBoss: [
+      { speaker:'ナレーター', text:'洞窟の最深部。地の底から唸り声が響く！' },
+      { speaker:'ケイブドラゴン', text:'グルルル...人間よ、貴様が魔王を倒しに来た勇者か。' },
+      { speaker:'ケイブドラゴン', text:'ここを通したら魔王様に顔向けできぬ。ここで朽ち果てよ！' },
+    ],
+    caveClear: [
+      { speaker:'ナレーター', text:'ケイブドラゴンが倒れた！洞窟の先に魔王城が見える。' },
+      { speaker:'勇者', text:'いよいよ最後の戦いだ。魔王よ、覚悟しろ！' },
+    ],
+    castleEnter: [
+      { speaker:'ナレーター', text:'魔王城の巨大な門が開いた。不気味な闇の気配が漂っている。' },
+      { speaker:'謎の声', text:'よくここまで来た、人間よ。だが、ここが貴様の墓場だ…。' },
+    ],
+    finalBoss: [
+      { speaker:'ナレーター', text:'巨大な玉座の間。魔王ゾルディアークが威圧感を放ちながら立っていた。' },
+      { speaker:'魔王ゾルディアーク', text:'フハハハ！ここまで辿り着くとは…勇者よ、その勇気は認めよう。' },
+      { speaker:'魔王ゾルディアーク', text:'しかし、光のクリスタルは返さぬ！世界は闇に沈む。それが定めだ！' },
+      { speaker:'勇者', text:'貴様に世界を支配する権利などない！クリスタルを返してもらう！' },
+      { speaker:'魔王ゾルディアーク', text:'言うではないか…。ならば力で証明してみせよ！いざ、勝負だ！' },
+    ],
+    finalBossPhase2: [
+      { speaker:'魔王ゾルディアーク', text:'ぐうっ...よくも！真の力を解放してやろう！' },
+      { speaker:'ナレーター', text:'魔王が変貌した！より強大な闇のオーラが解放される！' },
+    ],
+    ending: [
+      { speaker:'ナレーター', text:'魔王ゾルディアークが断末魔の叫びとともに倒れた！城が崩れ始める！' },
+      { speaker:'勇者', text:'光のクリスタルを取り戻した！急いで脱出しなければ！' },
+      { speaker:'ナレーター', text:'勇者は崩れ落ちる城から脱出し、クリスタルを光の神殿へと還した。' },
+      { speaker:'ナレーター', text:'クリスタルの輝きが世界全土を包み込み、魔王の闇は完全に消え去った。' },
+      { speaker:'ナレーター', text:'人々は再び平和な日々を取り戻し、勇者の名は永く語り継がれた。' },
+    ],
+  },
+};
