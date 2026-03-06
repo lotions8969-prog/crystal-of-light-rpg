@@ -156,23 +156,22 @@ class Game {
   // ── MAP ───────────────────────────────────────────────────
   renderMap() {
     const locs = [
-      { id: 'village', x: 80,  y: 180 },
-      { id: 'forest',  x: 240, y: 120 },
-      { id: 'cave',    x: 400, y: 180 },
-      { id: 'castle',  x: 520, y: 100 },
+      { id: 'village', x: 55,  y: 185 },
+      { id: 'forest',  x: 205, y: 115 },
+      { id: 'cave',    x: 365, y: 158 },
+      { id: 'castle',  x: 498, y: 88  },
     ];
     const paths = [
-      { x1:140, y1:200, w:100, h:6, angle:'-20deg' },
-      { x1:300, y1:145, w:100, h:6, angle:'20deg'  },
-      { x1:460, y1:155, w:80,  h:6, angle:'-20deg' },
+      { x1:140, y1:208, w:92, h:5, angle:'-22deg' },
+      { x1:290, y1:142, w:98, h:5, angle:'20deg'  },
+      { x1:452, y1:128, w:72, h:5, angle:'-26deg' },
     ];
     let html = `<div id="map-screen">
+      <div class="map-bg"></div>
       <div class="map-title">ワールドマップ</div>`;
-    // Paths
     paths.forEach(p => {
       html += `<div class="map-path" style="left:${p.x1}px;top:${p.y1}px;width:${p.w}px;height:${p.h}px;transform:rotate(${p.angle})"></div>`;
     });
-    // Locations
     locs.forEach(loc => {
       const area = this.areas[loc.id];
       const isCurrent = this.areaId === loc.id;
@@ -184,20 +183,19 @@ class Game {
       if (isCurrent) cls += ' current';
       if (isLocked) cls += ' locked';
       else if (isCleared) cls += ' cleared';
-      const statusText = isLocked ? '🔒 未到達' : isCleared && loc.id !== 'village' ? '✓ クリア済' : '';
+      const statusText = isLocked ? '未到達' : isCleared && loc.id !== 'village' ? '✓ 踏破' : '';
       html += `<div class="${cls}" style="left:${loc.x}px;top:${loc.y}px;z-index:2" onclick="game.goLocation('${loc.id}')">
         <span class="map-location-emoji">${area.emoji}</span>
         <span class="map-location-name">${area.name}</span>
         <span class="map-location-status">${statusText}</span>
       </div>`;
     });
-    // Player status
     const p = this.player;
     html += `<div class="map-player-status">
       <span class="map-status-item">Lv.<span>${p.level}</span></span>
       <span class="map-status-item">HP <span>${p.hp}/${p.maxHp}</span></span>
       <span class="map-status-item">MP <span>${p.mp}/${p.maxMp}</span></span>
-      <span class="map-status-item">💰 <span>${p.gold}G</span></span>
+      <span class="map-status-item">G <span>${p.gold}</span></span>
     </div>`;
     html += `</div>`;
     return html;
@@ -233,16 +231,65 @@ class Game {
   renderTown() {
     const area = this.areas['village'];
     return `<div id="town-screen">
-      <div class="town-bg">
-        <div class="town-scene">🏘️ 🌿 🏠</div>
-        <div class="town-name">${area.name}</div>
-        <div class="town-menu">
-          <button class="btn btn-gold" onclick="game.openShop()">🏪 お店</button>
-          <button class="btn" onclick="game.useInn()">🏨 宿屋 (20G)</button>
-          <button class="btn" onclick="game.openStatus()">📊 ステータス</button>
-          <button class="btn" onclick="game.goMap()">🗺️ 世界地図</button>
+      <div class="town-sky"></div>
+      <div class="town-cloud cloud-1"></div>
+      <div class="town-cloud cloud-2"></div>
+      <div class="town-ground"></div>
+      <div class="town-road"></div>
+
+      <!-- 宿屋 -->
+      <div style="position:absolute;bottom:47%;left:48px;z-index:5">
+        <div style="position:relative;width:108px;height:88px;background:#c8a86a;border:2px solid #8a6040">
+          <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:60px solid transparent;border-right:60px solid transparent;border-bottom:50px solid #8a3a1a"></div>
+          <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:24px;height:32px;background:#6a4020;border-radius:40% 40% 0 0/60% 60% 0 0"></div>
+          <div style="position:absolute;top:18px;left:10px;width:22px;height:22px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.6)"></div>
+          <div style="position:absolute;top:18px;right:10px;width:22px;height:22px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.6)"></div>
+          <div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:9px;color:#ffd700;white-space:nowrap;text-shadow:1px 1px 0 #000">宿 屋</div>
         </div>
-        <div style="font-size:11px;color:#888;margin-top:8px">長老: 勇気をもって旅立て、若者よ。</div>
+      </div>
+
+      <!-- 道具屋 -->
+      <div style="position:absolute;bottom:47%;left:238px;z-index:5">
+        <div style="position:relative;width:128px;height:78px;background:#a87850;border:2px solid #6a4020">
+          <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:70px solid transparent;border-right:70px solid transparent;border-bottom:44px solid #6a3010"></div>
+          <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:30px;height:26px;background:#5a3010;border:1px solid #3a1a00"></div>
+          <div style="position:absolute;top:14px;left:8px;width:34px;height:24px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.5)"></div>
+          <div style="position:absolute;top:14px;right:8px;width:34px;height:24px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.5)"></div>
+          <div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:9px;color:#ffd700;white-space:nowrap;text-shadow:1px 1px 0 #000">道 具 屋</div>
+        </div>
+      </div>
+
+      <!-- 教会 -->
+      <div style="position:absolute;bottom:47%;left:448px;z-index:5">
+        <div style="position:relative;width:90px;height:98px;background:#e0d8c0;border:2px solid #a09070">
+          <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:50px solid transparent;border-right:50px solid transparent;border-bottom:54px solid #888060"></div>
+          <div style="position:absolute;bottom:calc(100% + 54px);left:50%;transform:translateX(-55%);width:7px;height:18px;background:#ffd700"></div>
+          <div style="position:absolute;bottom:calc(100% + 60px);left:50%;transform:translateX(-55%) translateX(-6px);width:20px;height:6px;background:#ffd700"></div>
+          <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:22px;height:34px;background:#6a4020;border-radius:40% 40% 0 0/60% 60% 0 0"></div>
+          <div style="position:absolute;top:24px;left:8px;width:18px;height:22px;background:#a0d0ff;border:1px solid #808090;box-shadow:0 0 4px rgba(150,200,255,0.5)"></div>
+          <div style="position:absolute;top:24px;right:8px;width:18px;height:22px;background:#a0d0ff;border:1px solid #808090;box-shadow:0 0 4px rgba(150,200,255,0.5)"></div>
+        </div>
+      </div>
+
+      <!-- 木 -->
+      <div style="position:absolute;bottom:47%;left:196px;z-index:4">
+        <div style="width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-bottom:42px solid #2a8a18;margin:0 auto"></div>
+        <div style="width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:34px solid #3aaa20;margin:-12px auto 0"></div>
+        <div style="width:12px;height:24px;background:#6a4020;margin:0 auto;border:1px solid #4a2a10"></div>
+      </div>
+      <div style="position:absolute;bottom:47%;left:398px;z-index:4">
+        <div style="width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;border-bottom:38px solid #228818;margin:0 auto"></div>
+        <div style="width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:30px solid #2aaa18;margin:-10px auto 0"></div>
+        <div style="width:10px;height:20px;background:#6a4020;margin:0 auto;border:1px solid #4a2a10"></div>
+      </div>
+
+      <div class="town-name-panel">${area.name}</div>
+      <div class="town-elder-msg">長老：「勇気をもって旅立て、若者よ。」</div>
+      <div class="town-menu-panel">
+        <button class="btn btn-gold" onclick="game.openShop()">お店</button>
+        <button class="btn" onclick="game.useInn()">宿屋 (20G)</button>
+        <button class="btn" onclick="game.openStatus()">ステータス</button>
+        <button class="btn" onclick="game.goMap()">世界地図</button>
       </div>
     </div>`;
   }
@@ -405,46 +452,60 @@ class Game {
   renderDungeon() {
     const area = this.areas[this.areaId];
     const bossReady = this.room >= area.rooms && !area.bossDefeated;
-    const scenes = {
-      forest: ['🌲🌿🌳','🌿🍃🌳🌲','🌲🦋🌿','🌳🌲🌿🌿','🏔️🌲🌳'],
-      cave:   ['⛏️🪨🌑','💎🪨⛏️','🦇🌑🪨','⛏️💎🌑','🐲🌑🪨🔥'],
-      castle: ['🏰🌑🗡️','⛓️🗡️💀','🌑👿🗡️','🔥💀⛓️','💀👹🔥','👑🌑⛓️','🏰💀🔥','👑🌑🗡️'],
+    const areaClass = `area-${this.areaId}`;
+
+    const centerEmojis = {
+      forest: ['🌲','🌿','🦋','🌳','🍃'],
+      cave:   ['💎','🪨','🦇','⛏️','🔥'],
+      castle: ['💀','⛓️','🗡️','👿','🔥'],
     };
-    const sceneEmoji = (scenes[this.areaId] || ['?'])[Math.min(this.room, (scenes[this.areaId]||['?']).length-1)];
+    const emojis = centerEmojis[this.areaId] || ['?'];
+    const sceneEmoji = bossReady ? '💀' : emojis[Math.min(this.room, emojis.length - 1)];
 
     const logHtml = this.dungeonLog.slice(-5).map(l =>
       `<div class="dungeon-log-entry${l.important?' important':''}">${l.text}</div>`
     ).join('');
 
-    const treasure = bossReady ? null : this.getCurrentTreasure();
+    const torches = (this.areaId === 'cave' || this.areaId === 'castle') ? `
+      <div style="position:absolute;left:26%;top:28%;font-size:22px;filter:drop-shadow(0 0 8px orange);animation:dungeon-float 0.4s ease-in-out infinite alternate">🔥</div>
+      <div style="position:absolute;right:26%;top:28%;font-size:22px;filter:drop-shadow(0 0 8px orange);animation:dungeon-float 0.4s ease-in-out infinite alternate 0.2s">🔥</div>` : '';
 
     return `<div id="dungeon-screen">
       <div class="dungeon-bg">
-        <div class="dungeon-scene">
-          <div class="dungeon-room-info">${area.name} [${this.room+1}/${area.rooms+1}]</div>
-          <div class="dungeon-illustration">
-            <span class="dungeon-illustration-emoji">${sceneEmoji}</span>
-            <div style="font-size:12px;color:#888">${bossReady ? '⚠️ ボスが待ち受けている' : `${area.name}`}</div>
+        <div class="dungeon-scene ${areaClass}">
+          <div class="dungeon-walls">
+            <div class="dungeon-wall-left ${areaClass}"></div>
+            <div class="dungeon-wall-right ${areaClass}"></div>
+            <div class="dungeon-ceiling"></div>
+            <div class="dungeon-floor"></div>
+          </div>
+          ${torches}
+          <div class="dungeon-room-info">${area.name}　[${this.room + 1} / ${area.rooms + 1}]</div>
+          <div class="dungeon-center">
+            <span class="dungeon-illustration-emoji" style="font-size:${bossReady ? '88' : '58'}px">${sceneEmoji}</span>
+            <div style="font-size:11px;color:${bossReady ? '#ff6666' : '#666'};margin-top:4px">
+              ${bossReady ? '--- ボスが待ち受けている ---' : area.name}
+            </div>
           </div>
           ${this.lastTreasure ? `<div class="treasure-found">${this.lastTreasure}</div>` : ''}
         </div>
         <div class="dungeon-actions">
           <div class="dungeon-menu">
             ${bossReady
-              ? `<button class="btn btn-danger" onclick="game.fightBoss()">⚔️ ボスに挑む</button>`
-              : `<button class="btn btn-gold" onclick="game.advance()">→ 前進する</button>`}
-            <button class="btn" onclick="game.searchRoom()">🔍 探索する</button>
-            <button class="btn" onclick="game.openStatus()">📊 ステータス</button>
-            <button class="btn" onclick="game.retreatTown()">🏘️ 村へ戻る</button>
+              ? `<button class="btn btn-danger" onclick="game.fightBoss()">ボスに挑む</button>`
+              : `<button class="btn btn-gold" onclick="game.advance()">前進する</button>`}
+            <button class="btn" onclick="game.searchRoom()">探索する</button>
+            <button class="btn" onclick="game.openStatus()">ステータス</button>
+            <button class="btn" onclick="game.retreatTown()">村へ戻る</button>
           </div>
           <div class="dungeon-status">
             <div style="font-size:12px;color:#ffd700;margin-bottom:6px">${this.player.name}</div>
-            <div style="font-size:11px;color:#a0c4ff">HP: <span style="color:#fff">${this.player.hp}/${this.player.maxHp}</span></div>
+            <div style="font-size:11px;color:#a0c4ff">HP <span style="color:#fff">${this.player.hp}/${this.player.maxHp}</span></div>
             ${this.makeHpBar(this.player.hp, this.player.maxHp, 120)}
-            <div style="font-size:11px;color:#a0c4ff;margin-top:4px">MP: <span style="color:#fff">${this.player.mp}/${this.player.maxMp}</span></div>
+            <div style="font-size:11px;color:#a0c4ff;margin-top:4px">MP <span style="color:#fff">${this.player.mp}/${this.player.maxMp}</span></div>
             ${this.makeMpBar(this.player.mp, this.player.maxMp, 120)}
-            <div style="font-size:11px;color:#a0c4ff;margin-top:6px">Lv: <span style="color:#fff">${this.player.level}</span></div>
-            ${this.player.status.map(s=>`<span class="poison-badge">毒</span>`).join('')}
+            <div style="font-size:11px;color:#a0c4ff;margin-top:6px">Lv <span style="color:#fff">${this.player.level}</span></div>
+            ${this.player.status.map(() => '<span class="poison-badge">毒</span>').join('')}
           </div>
           <div class="dungeon-log">${logHtml}</div>
         </div>
@@ -573,41 +634,50 @@ class Game {
     const m = b.monster;
     const p = this.player;
     const mHpPct = clamp(m.hp / m.maxHp * 100, 0, 100);
-    const pHpPct  = clamp(p.hp / p.maxHp * 100, 0, 100);
-    const pMpPct  = clamp(p.mp / p.maxMp * 100, 0, 100);
-    const pHpCls  = pHpPct < 25 ? 'hp-bar low' : pHpPct < 50 ? 'hp-bar mid' : 'hp-bar';
+    const pHpPct = clamp(p.hp / p.maxHp * 100, 0, 100);
+    const pMpPct = clamp(p.mp / p.maxMp * 100, 0, 100);
+    const pHpCls = pHpPct < 25 ? 'hp-bar low' : pHpPct < 50 ? 'hp-bar mid' : 'hp-bar';
 
-    const logHtml = this.battleLog.slice(-5).map((l, i) => {
+    const bgMap = { forest: 'bg-forest', cave: 'bg-cave', castle: 'bg-castle', village: 'bg-forest' };
+    const bgClass = bgMap[this.areaId] || 'bg-forest';
+
+    const logHtml = this.battleLog.slice(-5).map(l => {
       let cls = 'battle-log-entry';
       if (l.includes('ダメージ') && l.includes(p.name)) cls += ' player';
       else if (l.includes(m.name) && l.includes('ダメージ')) cls += ' enemy';
-      else if (l.includes('回復') || l.includes('HP')) cls += ' heal';
+      else if (l.includes('回復')) cls += ' heal';
       else cls += ' system';
       return `<div class="${cls}">${l}</div>`;
     }).join('');
 
     const cmdHtml = this.subMenu ? this.renderSubMenu() : `
-      <button class="btn" onclick="game.cmdAttack()">⚔️ こうげき</button>
-      <button class="btn" onclick="game.cmdMagic()">✨ まほう</button>
-      <button class="btn" onclick="game.cmdItem()">💊 どうぐ</button>
-      <button class="btn btn-danger" onclick="game.cmdFlee()">💨 にげる</button>`;
+      <button class="btn" onclick="game.cmdAttack()">こうげき</button>
+      <button class="btn" onclick="game.cmdMagic()">まほう</button>
+      <button class="btn" onclick="game.cmdItem()">どうぐ</button>
+      <button class="btn btn-danger" onclick="game.cmdFlee()">にげる</button>`;
 
     return `<div id="battle-screen">
-      <div class="battle-scene">
+      <div class="battle-env ${bgClass}">
         <div class="battle-enemy" id="battle-enemy">
           <span class="battle-enemy-emoji" style="color:${m.color}">${m.emoji}</span>
-          <div class="battle-enemy-name">${m.name}${m.phase===2?' ★':''}</div>
-          <div class="battle-enemy-hp">HP: ${m.hp} / ${m.maxHp}</div>
-          <div class="hp-bar-container"><div class="hp-bar" style="width:${mHpPct}%"></div></div>
+          <div class="enemy-shadow"></div>
+          <div class="battle-enemy-nameplate">
+            <div class="battle-enemy-name">${m.name}${m.phase === 2 ? ' ★' : ''}</div>
+            <div class="battle-enemy-hp-text">HP: ${m.hp} / ${m.maxHp}</div>
+            <div class="hp-bar-container" style="width:140px;margin:2px auto">
+              <div class="hp-bar" style="width:${mHpPct}%"></div>
+            </div>
+          </div>
         </div>
         <div class="battle-hero">
           <span class="battle-hero-emoji">🧙‍♂️</span>
+          <div class="battle-hero-shadow"></div>
           <div class="battle-hero-name">${p.name} Lv.${p.level}</div>
-          <div style="font-size:10px;color:#aaa;margin-top:4px">HP ${p.hp}/${p.maxHp}</div>
-          <div class="hp-bar-container"><div class="${pHpCls}" style="width:${pHpPct}%"></div></div>
-          <div style="font-size:10px;color:#aaa;margin-top:4px">MP ${p.mp}/${p.maxMp}</div>
-          <div class="mp-bar-container"><div class="mp-bar" style="width:${pMpPct}%"></div></div>
-          ${p.status.map(()=>'<span class="poison-badge">毒</span>').join('')}
+          <div style="font-size:10px;color:#a0c4ff;margin-top:3px">HP ${p.hp}/${p.maxHp}</div>
+          <div class="hp-bar-container" style="width:100px"><div class="${pHpCls}" style="width:${pHpPct}%"></div></div>
+          <div style="font-size:10px;color:#a0c4ff;margin-top:2px">MP ${p.mp}/${p.maxMp}</div>
+          <div class="mp-bar-container" style="width:100px"><div class="mp-bar" style="width:${pMpPct}%"></div></div>
+          ${p.status.map(() => '<span class="poison-badge">毒</span>').join('')}
         </div>
       </div>
       <div class="battle-bottom">
@@ -617,7 +687,12 @@ class Game {
           <div class="status-row"><span class="status-label">ATK</span><span class="status-value">${this.getATK()}</span></div>
           <div class="status-row"><span class="status-label">DEF</span><span class="status-value">${this.getDEF()}</span></div>
           <div class="status-row"><span class="status-label">SPD</span><span class="status-value">${p.spd}</span></div>
-          <div style="margin-top:8px;font-size:10px;color:#666">Gold: ${p.gold}</div>
+          <div style="margin-top:8px;border-top:1px solid #333;padding-top:8px">
+            <div style="color:#a0c4ff;font-size:10px">EXP</div>
+            <div style="color:#fff;font-size:10px">${p.exp}/${p.expNext}</div>
+            <div style="color:#a0c4ff;font-size:10px;margin-top:4px">GOLD</div>
+            <div style="color:#ffd700;font-size:10px">${p.gold} G</div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -974,7 +1049,7 @@ class Game {
 
   showDmgNum(dmg, target) {
     setTimeout(() => {
-      const scene = document.querySelector('.battle-scene');
+      const scene = document.querySelector('.battle-env');
       if (!scene) return;
       const el = document.createElement('div');
       el.className = `damage-number ${target === 'enemy' ? 'enemy-dmg' : 'player-dmg'}`;
