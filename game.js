@@ -641,61 +641,110 @@ class Game {
     const bgMap = { forest: 'bg-forest', cave: 'bg-cave', castle: 'bg-castle', village: 'bg-forest' };
     const bgClass = bgMap[this.areaId] || 'bg-forest';
 
-    const logHtml = this.battleLog.slice(-5).map(l => {
-      let cls = 'battle-log-entry';
-      if (l.includes('ダメージ') && l.includes(p.name)) cls += ' player';
-      else if (l.includes(m.name) && l.includes('ダメージ')) cls += ' enemy';
-      else if (l.includes('回復')) cls += ' heal';
-      else cls += ' system';
+    // SVG sprite or emoji fallback
+    const isBoss = b.isBoss;
+    const spriteKey = m.sprite;
+    const spriteHtml = (typeof SPRITES !== 'undefined' && SPRITES[spriteKey])
+      ? `<div class="enemy-sprite-wrap${isBoss ? ' boss-sprite' : ''}">${SPRITES[spriteKey]}</div>`
+      : `<span style="font-size:${isBoss?'100':'80'}px;filter:drop-shadow(0 0 12px ${m.color})">${m.emoji}</span>`;
+
+    // Last 4 log entries
+    const logLines = this.battleLog.slice(-4);
+    const logHtml = logLines.map(l => {
+      let cls = 'bl-entry';
+      if (l.includes('ダメージ') && l.includes(p.name)) cls += ' pl';
+      else if (l.includes(m.name) && l.includes('ダメージ')) cls += ' en';
+      else if (l.includes('回復') || l.includes('かいふく')) cls += ' hl';
+      else cls += ' sy';
       return `<div class="${cls}">${l}</div>`;
     }).join('');
 
+    // HP blocks display (DQ7 style)
+    const hpBlocks = this._makeBlocks(p.hp, p.maxHp, 18, pHpPct < 25 ? '#ff4444' : pHpPct < 50 ? '#ffcc00' : '#44ee44');
+    const mpBlocks = this._makeBlocks(p.mp, p.maxMp, 18, '#4488ff');
+
     const cmdHtml = this.subMenu ? this.renderSubMenu() : `
-      <button class="btn" onclick="game.cmdAttack()">こうげき</button>
-      <button class="btn" onclick="game.cmdMagic()">まほう</button>
-      <button class="btn" onclick="game.cmdItem()">どうぐ</button>
-      <button class="btn btn-danger" onclick="game.cmdFlee()">にげる</button>`;
+      <button class="dq-cmd" onclick="game.cmdAttack()"><span class="cmd-cursor">▶</span>たたかう</button>
+      <button class="dq-cmd" onclick="game.cmdMagic()"><span class="cmd-cursor"> </span>じゅもん</button>
+      <button class="dq-cmd" onclick="game.cmdItem()"><span class="cmd-cursor"> </span>どうぐ</button>
+      <button class="dq-cmd danger" onclick="game.cmdFlee()"><span class="cmd-cursor"> </span>にげる</button>`;
 
     return `<div id="battle-screen">
-      <div class="battle-env ${bgClass}">
+      <div class="battle-env ${bgClass}" id="battle-env">
+
+        <!-- Enemy -->
         <div class="battle-enemy" id="battle-enemy">
-          <span class="battle-enemy-emoji" style="color:${m.color}">${m.emoji}</span>
+          ${spriteHtml}
           <div class="enemy-shadow"></div>
-          <div class="battle-enemy-nameplate">
-            <div class="battle-enemy-name">${m.name}${m.phase === 2 ? ' ★' : ''}</div>
-            <div class="battle-enemy-hp-text">HP: ${m.hp} / ${m.maxHp}</div>
-            <div class="hp-bar-container" style="width:140px;margin:2px auto">
-              <div class="hp-bar" style="width:${mHpPct}%"></div>
-            </div>
+        </div>
+
+        <!-- Hero sprite (DQ7 shows party in lower right) -->
+        <div class="battle-hero-sprite">
+          <div class="hero-figure">
+            <div class="hero-head"></div>
+            <div class="hero-body"></div>
+            <div class="hero-legs"></div>
+            <div class="hero-sword"></div>
+          </div>
+          <div class="battle-hero-shadow" style="width:36px;height:6px;background:rgba(0,0,0,0.45);border-radius:50%;margin:0 auto;filter:blur(3px)"></div>
+        </div>
+
+        <!-- Enemy nameplate (top-left) -->
+        <div class="enemy-nameplate-top">
+          <span class="ent-name">${m.name}${m.phase === 2 ? ' <span style="color:#ff8800">★</span>' : ''}</span>
+          <div class="ent-hp-row">
+            <span class="ent-hp-label">HP</span>
+            <div class="hp-bar-container" style="width:110px"><div class="hp-bar" style="width:${mHpPct}%"></div></div>
+            <span class="ent-hp-num">${m.hp}</span>
           </div>
         </div>
-        <div class="battle-hero">
-          <span class="battle-hero-emoji">🧙‍♂️</span>
-          <div class="battle-hero-shadow"></div>
-          <div class="battle-hero-name">${p.name} Lv.${p.level}</div>
-          <div style="font-size:10px;color:#a0c4ff;margin-top:3px">HP ${p.hp}/${p.maxHp}</div>
-          <div class="hp-bar-container" style="width:100px"><div class="${pHpCls}" style="width:${pHpPct}%"></div></div>
-          <div style="font-size:10px;color:#a0c4ff;margin-top:2px">MP ${p.mp}/${p.maxMp}</div>
-          <div class="mp-bar-container" style="width:100px"><div class="mp-bar" style="width:${pMpPct}%"></div></div>
-          ${p.status.map(() => '<span class="poison-badge">毒</span>').join('')}
-        </div>
+
       </div>
-      <div class="battle-bottom">
-        <div class="battle-log">${logHtml}</div>
-        <div class="battle-commands">${cmdHtml}</div>
-        <div class="battle-status-panel">
-          <div class="status-row"><span class="status-label">ATK</span><span class="status-value">${this.getATK()}</span></div>
-          <div class="status-row"><span class="status-label">DEF</span><span class="status-value">${this.getDEF()}</span></div>
-          <div class="status-row"><span class="status-label">SPD</span><span class="status-value">${p.spd}</span></div>
-          <div style="margin-top:8px;border-top:1px solid #333;padding-top:8px">
-            <div style="color:#a0c4ff;font-size:10px">EXP</div>
-            <div style="color:#fff;font-size:10px">${p.exp}/${p.expNext}</div>
-            <div style="color:#a0c4ff;font-size:10px;margin-top:4px">GOLD</div>
-            <div style="color:#ffd700;font-size:10px">${p.gold} G</div>
+
+      <!-- DQ7-style bottom UI -->
+      <div class="battle-ui">
+
+        <!-- Message window -->
+        <div class="battle-msg-win">
+          <div class="battle-log-dq">${logHtml}</div>
+        </div>
+
+        <!-- Status + Commands -->
+        <div class="battle-right-panel">
+
+          <!-- Player status (DQ7 style) -->
+          <div class="dq-status-win">
+            <div class="dst-name">${p.name}<span class="dst-lv">Lv <span>${p.level}</span></span></div>
+            <div class="dst-row">
+              <span class="dst-label">HP</span>
+              <span class="dst-num">${p.hp}<span class="dst-slash">／</span>${p.maxHp}</span>
+            </div>
+            <div class="dst-blocks">${hpBlocks}</div>
+            <div class="dst-row" style="margin-top:4px">
+              <span class="dst-label">MP</span>
+              <span class="dst-num">${p.mp}<span class="dst-slash">／</span>${p.maxMp}</span>
+            </div>
+            <div class="dst-blocks">${mpBlocks}</div>
+            ${p.status.length ? `<div style="margin-top:4px"><span class="poison-badge">どく</span></div>` : ''}
           </div>
+
+          <!-- Command window -->
+          <div class="dq-cmd-win">
+            ${cmdHtml}
+          </div>
+
         </div>
       </div>
     </div>`;
+  }
+
+  _makeBlocks(cur, max, count, color) {
+    const filled = Math.round(clamp(cur / max, 0, 1) * count);
+    let html = '';
+    for (let i = 0; i < count; i++) {
+      html += `<span class="hp-block" style="background:${i < filled ? color : '#333'};border-color:${i < filled ? color : '#444'}"></span>`;
+    }
+    return html;
   }
 
   renderSubMenu() {

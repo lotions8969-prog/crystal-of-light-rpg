@@ -290,10 +290,10 @@ body {
 .dungeon-log-entry { margin-bottom: 4px; }
 .dungeon-log-entry.important { color: #ffd700; }
 
-/* ========== BATTLE SCREEN ========== */
+/* ========== BATTLE SCREEN - DQ7 Style ========== */
 #battle-screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
 .battle-env {
-  flex: 1; position: relative; overflow: hidden;
+  flex: 1; position: relative; overflow: hidden; min-height: 0;
 }
 /* Forest */
 .battle-env.bg-forest {
@@ -332,47 +332,88 @@ body {
 }
 @keyframes castleGlow { from { opacity: 0.4; } to { opacity: 1; } }
 
-/* Enemy */
+/* ===== ENEMY DISPLAY ===== */
 .battle-enemy {
-  position: absolute; left: 12%; top: 12%; text-align: center;
-  animation: enemy-idle 2.5s ease-in-out infinite;
+  position: absolute; left: 50%; top: 6%;
+  transform: translateX(-50%);
+  text-align: center;
+  animation: enemy-idle 2.8s ease-in-out infinite;
 }
 @keyframes enemy-idle {
-  0%, 100% { transform: translateY(0) scaleX(1); }
-  50% { transform: translateY(-10px) scaleX(1.02); }
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-10px); }
 }
-.battle-enemy-emoji {
-  font-size: 110px; display: block; line-height: 1;
-  filter: drop-shadow(0 0 18px currentColor) drop-shadow(0 6px 10px rgba(0,0,0,0.9));
-}
+.enemy-sprite-wrap { display: inline-block; }
+.enemy-sprite-wrap svg { display: block; filter: drop-shadow(0 0 14px rgba(255,255,255,0.14)) drop-shadow(0 8px 18px rgba(0,0,0,0.88)); }
+.enemy-sprite-wrap.boss-sprite { transform: scale(1.2); transform-origin: bottom center; }
 .enemy-shadow {
-  width: 80px; height: 14px;
+  width: 70px; height: 12px;
   background: rgba(0,0,0,0.55); border-radius: 50%; margin: 2px auto; filter: blur(5px);
 }
-.battle-enemy-nameplate {
-  background: rgba(0,0,40,0.90); border: 2px solid #fff;
-  padding: 4px 10px; margin-top: 6px; display: inline-block; position: relative;
-}
-.battle-enemy-name { font-size: 12px; color: #ffaaaa; }
-.battle-enemy-hp-text { font-size: 10px; color: #aaa; margin: 2px 0; }
 
-/* Hero */
-.battle-hero {
-  position: absolute; right: 10%; bottom: 6%; text-align: center;
+/* Enemy nameplate (top-left corner) */
+.enemy-nameplate-top {
+  position: absolute; top: 10px; left: 12px;
+  background: rgba(0,0,44,0.94); border: 2px solid #fff;
+  padding: 6px 12px 6px 10px; min-width: 210px;
 }
-.battle-hero-emoji {
-  font-size: 58px; display: block;
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.9));
-  animation: hero-idle 3s ease-in-out infinite;
+.ent-name { font-size: 12px; color: #ffccaa; display: block; margin-bottom: 4px; }
+.ent-hp-row { display: flex; align-items: center; gap: 5px; }
+.ent-hp-label { font-size: 10px; color: #a0c4ff; }
+.ent-hp-num { font-size: 10px; color: #fff; margin-left: 4px; }
+
+/* Hero CSS figure */
+.battle-hero-sprite {
+  position: absolute; right: 7%; bottom: 4%; text-align: center;
+  animation: hero-idle 3.5s ease-in-out infinite;
 }
 @keyframes hero-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-.battle-hero-shadow {
-  width: 42px; height: 8px;
-  background: rgba(0,0,0,0.55); border-radius: 50%; margin: 1px auto; filter: blur(3px);
+.hero-figure { position: relative; width: 48px; height: 72px; margin: 0 auto; }
+.hero-head {
+  position: absolute; top: 0; left: 12px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #f5c8a0, #c8845a);
+  border: 2px solid #8a4a20;
 }
-.battle-hero-name { font-size: 11px; color: #88ccff; margin-top: 4px; }
+.hero-head::before {
+  content: ''; position: absolute; top: -3px; left: -2px;
+  width: 28px; height: 14px; border-radius: 14px 14px 0 0;
+  background: #442200;
+}
+.hero-head::after {
+  content: ''; position: absolute; top: 11px; left: 4px;
+  width: 4px; height: 4px; border-radius: 50%; background: #1a1a2a;
+  box-shadow: 9px 0 0 #1a1a2a;
+}
+.hero-body {
+  position: absolute; top: 22px; left: 4px;
+  width: 40px; height: 30px;
+  background: radial-gradient(circle at 38% 30%, #5577cc, #2244aa);
+  border: 2px solid #1133aa; border-radius: 4px 4px 0 0;
+}
+.hero-body::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 6px; background: #8a5a20;
+}
+.hero-legs {
+  position: absolute; top: 50px; left: 6px;
+  width: 36px; height: 22px;
+  background: linear-gradient(180deg, #3355aa 0%, #223388 100%);
+  border: 2px solid #1133aa;
+}
+.hero-sword {
+  position: absolute; top: 8px; right: -16px;
+  width: 6px; height: 45px;
+  background: linear-gradient(180deg, #e8e8f0, #9898b8);
+  border: 1px solid #6666aa; border-radius: 1px;
+  transform: rotate(12deg);
+}
+.hero-sword::before {
+  content: ''; position: absolute; top: 28px; left: -6px;
+  width: 18px; height: 5px; background: #c8a840; border-radius: 2px;
+}
 
-/* HP/MP bars */
+/* HP/MP bars (used in dungeon/status) */
 .hp-bar-container {
   width: 120px; height: 10px;
   background: #111; border: 1px solid #555;
@@ -394,34 +435,71 @@ body {
   width: 120px; height: 8px;
   background: #111; border: 1px solid #555; margin: 3px auto; overflow: hidden;
 }
-.mp-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #2222aa, #4466ff);
-  transition: width 0.4s ease;
-}
+.mp-bar { height: 100%; background: linear-gradient(90deg, #2222aa, #4466ff); transition: width 0.4s ease; }
 
-/* Battle bottom */
-.battle-bottom { height: 195px; display: flex; border-top: 3px solid #fff; }
-.battle-log {
-  flex: 1; background: rgba(0,0,40,0.97); padding: 10px 12px;
-  font-size: 11px; overflow-y: auto;
-  display: flex; flex-direction: column; justify-content: flex-end;
+/* ===== DQ7 BATTLE UI ===== */
+.battle-ui {
+  height: 200px; display: flex;
+  border-top: 3px solid #fff;
+  background: rgba(0,0,38,0.98);
 }
-.battle-log-entry { margin-bottom: 3px; animation: fadeIn 0.3s ease; line-height: 1.5; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-.battle-log-entry.player { color: #88ccff; }
-.battle-log-entry.enemy  { color: #ff8888; }
-.battle-log-entry.system { color: #ffd700; }
-.battle-log-entry.heal   { color: #66ee66; }
-.battle-commands {
-  width: 200px; background: rgba(0,0,40,0.97);
-  border-left: 3px solid #fff; padding: 10px;
-  display: flex; flex-direction: column; gap: 5px;
+.battle-msg-win {
+  flex: 1; border-right: 3px solid #fff;
+  display: flex; flex-direction: column;
 }
-.battle-status-panel {
-  width: 175px; background: rgba(0,0,40,0.97);
-  border-left: 3px solid #fff; padding: 12px; font-size: 11px;
+.battle-log-dq {
+  flex: 1; padding: 10px 14px;
+  font-size: 12px; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
 }
+.bl-entry { line-height: 1.58; animation: fadeIn 0.25s ease; }
+.bl-entry.pl { color: #88ccff; }
+.bl-entry.en { color: #ff9988; }
+.bl-entry.sy { color: #ffd700; }
+.bl-entry.hl { color: #66ee88; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+
+.battle-right-panel { width: 232px; display: flex; flex-direction: column; }
+.dq-status-win {
+  padding: 8px 12px; border-bottom: 2px solid #fff;
+  background: rgba(0,0,30,0.82); flex: 1;
+}
+.dst-name {
+  font-size: 12px; color: #fff; margin-bottom: 5px;
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.dst-lv { font-size: 10px; color: #a0c4ff; }
+.dst-lv span { color: #ffd700; }
+.dst-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
+.dst-label { font-size: 10px; color: #a0c4ff; width: 18px; }
+.dst-num { font-size: 11px; color: #fff; }
+.dst-slash { color: #888; margin: 0 1px; }
+.dst-blocks { display: flex; gap: 1px; margin-bottom: 2px; flex-wrap: wrap; }
+.hp-block {
+  width: 8px; height: 8px; border-radius: 1px;
+  border: 1px solid #555; display: inline-block;
+  transition: background 0.3s;
+}
+.dq-cmd-win {
+  display: flex; flex-direction: column; padding: 5px 8px; gap: 1px;
+  background: rgba(0,0,50,0.92);
+}
+.dq-cmd {
+  background: transparent; border: none;
+  color: #fff; font-family: 'DotGothic16', monospace;
+  font-size: 13px; padding: 5px 8px;
+  cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 5px;
+  transition: color 0.1s; border-radius: 2px;
+}
+.dq-cmd:hover, .dq-cmd:focus {
+  background: rgba(255,215,0,0.15); color: #ffd700; outline: none;
+}
+.dq-cmd.danger { color: #ff8888; }
+.dq-cmd.danger:hover { background: rgba(255,68,68,0.15); color: #ff4444; }
+.cmd-cursor { color: #ffd700; font-size: 10px; width: 10px; }
+
+/* keep status-label etc for status screen */
 .status-label { color: #a0c4ff; }
 .status-value { color: #ffd700; margin-left: 8px; }
 .status-row { margin-bottom: 8px; display: flex; align-items: center; }
