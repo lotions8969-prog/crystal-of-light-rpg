@@ -9,6 +9,617 @@ const $ = id => document.getElementById(id);
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+// ============================================================
+//  BattleRenderer — Canvas-based CT-level battle visuals
+// ============================================================
+class BattleRenderer {
+  constructor() {
+    this.canvas = null;
+    this.ctx    = null;
+    this.raf    = null;
+    this.frame  = 0;
+    this.anims  = {};
+    this.W = 640;
+    this.H = 302;
+  }
+
+  mount(envEl) {
+    if (this.canvas) this.canvas.remove();
+    this.canvas = document.createElement('canvas');
+    this.canvas.width  = this.W;
+    this.canvas.height = this.H;
+    this.canvas.style.cssText =
+      'position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;' +
+      'image-rendering:pixelated;image-rendering:crisp-edges;pointer-events:none';
+    envEl.prepend(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+  }
+
+  start() {
+    this.stop();
+    const tick = () => {
+      this.frame++;
+      if (this.ctx) this._draw();
+      this.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  stop() {
+    if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+    if (this.canvas) { this.canvas.remove(); this.canvas = null; this.ctx = null; }
+  }
+
+  triggerAnim(id, type) {
+    const dur = type === 'attack' ? 30 : 20;
+    this.anims[id] = { type, start: this.frame, dur };
+  }
+
+  _getAnim(id) {
+    const a = this.anims[id];
+    if (!a) return { x: 0, y: 0 };
+    const t = (this.frame - a.start) / a.dur;
+    if (t >= 1) { delete this.anims[id]; return { x: 0, y: 0 }; }
+    if (a.type === 'attack') {
+      const curve = t < 0.45 ? t / 0.45 : 1 - (t - 0.45) / 0.55;
+      return { x: curve * this.W * 0.36, y: -curve * 12 };
+    }
+    if (a.type === 'hurt') return { x: Math.sin(t * Math.PI * 5) * 10, y: 0 };
+    return { x: 0, y: 0 };
+  }
+
+  _draw() {
+    const g = window.game;
+    if (!g || !g.battle) return;
+    const { ctx, W, H, frame } = this;
+    ctx.clearRect(0, 0, W, H);
+
+    const area = g.areaId;
+    if      (area === 'cave')    this._bgCave();
+    else if (area === 'castle')  this._bgCastle();
+    else                          this._bgForest();
+
+    // Draw party
+    const members = this._members(g);
+    const layout = [
+      { x: W*0.07, y: H*0.76 },
+      { x: W*0.20, y: H*0.82 },
+      { x: W*0.07, y: H*0.93 },
+      { x: W*0.20, y: H*0.97 },
+    ];
+    members.forEach((m, i) => {
+      if (!layout[i]) return;
+      const bob  = Math.sin(frame * 0.05 + i * 1.3) * 2.2;
+      const anim = this._getAnim(m.id);
+      const x = layout[i].x + anim.x;
+      const y = layout[i].y + bob + anim.y;
+      this._drawShadow(x + 16, y + 4);
+      ctx.save();
+      if (!m.alive) { ctx.globalAlpha = 0.22; ctx.filter = 'grayscale(100%)'; }
+      ctx.translate(x, y);
+      const fn = this['_c_' + m.id];
+      if (fn) fn.call(this, ctx);
+      else this._c_hero(ctx);
+      ctx.restore();
+    });
+  }
+
+  _members(g) {
+    const p = g.player;
+    const list = [{ id:'hero', alive: p.hp > 0 }];
+    g.party.forEach(id => {
+      const pm = g.partyData[id];
+      if (pm) list.push({ id, alive: pm.alive && pm.hp > 0 });
+    });
+    return list;
+  }
+
+  _drawShadow(cx, cy) {
+    const ctx = this.ctx;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
+    g.addColorStop(0, 'rgba(0,0,0,0.45)');
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.save(); ctx.scale(1, 0.3);
+    ctx.beginPath(); ctx.arc(cx, cy/0.3, 22, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // ── FOREST BACKGROUND ─────────────────────────────────────
+  _bgForest() {
+    const { ctx, W, H, frame } = this;
+    // Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, H*0.6);
+    sky.addColorStop(0,   '#0e2888');
+    sky.addColorStop(0.5, '#1e50d8');
+    sky.addColorStop(1,   '#5898f8');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H*0.6);
+
+    // Sun
+    const sunG = ctx.createRadialGradient(W*0.75, H*0.12, 2, W*0.75, H*0.12, 36);
+    sunG.addColorStop(0, 'rgba(255,240,180,0.95)');
+    sunG.addColorStop(0.4, 'rgba(255,200,80,0.5)');
+    sunG.addColorStop(1, 'transparent');
+    ctx.fillStyle = sunG; ctx.fillRect(W*0.55, 0, W*0.4, H*0.3);
+    ctx.fillStyle = '#fff8e0';
+    ctx.beginPath(); ctx.arc(W*0.75, H*0.12, 18, 0, Math.PI*2); ctx.fill();
+
+    // Clouds
+    [[0.12,0.1,32,0.14],[0.40,0.07,24,0.09],[0.64,0.13,28,0.11]].forEach(([cx,cy,r,spd]) => {
+      const ox = ((cx*W + frame*spd) % (W+80)) - 40;
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      [[0,0,r],[r*0.75,0,r*0.65],[-r*0.6,r*0.2,r*0.55],[r*0.25,-r*0.35,r*0.5]].forEach(([dx,dy,rad]) => {
+        ctx.beginPath(); ctx.arc(ox+dx, cy*H+dy, rad, 0, Math.PI*2); ctx.fill();
+      });
+    });
+
+    // Far mountains
+    ctx.fillStyle = '#1a4882';
+    ctx.beginPath(); ctx.moveTo(0, H*0.54);
+    [0,0.07,0.14,0.22,0.30,0.38,0.46,0.55,0.63,0.71,0.79,0.87,0.95,1.0].forEach((x,i) => {
+      const peaks = [0.5,0.42,0.48,0.38,0.44,0.4,0.46,0.36,0.43,0.41,0.45,0.37,0.44,0.5];
+      ctx.lineTo(x*W, peaks[i]*H);
+    });
+    ctx.lineTo(W,H*0.54); ctx.closePath(); ctx.fill();
+
+    // Mid hills
+    ctx.fillStyle = '#1e6820';
+    ctx.beginPath(); ctx.moveTo(0,H);
+    ctx.lineTo(0, H*0.58);
+    ctx.quadraticCurveTo(W*0.12,H*0.48, W*0.25,H*0.56);
+    ctx.quadraticCurveTo(W*0.38,H*0.62, W*0.50,H*0.53);
+    ctx.quadraticCurveTo(W*0.62,H*0.44, W*0.75,H*0.54);
+    ctx.quadraticCurveTo(W*0.88,H*0.62, W,H*0.57);
+    ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+
+    // Back trees
+    [0.0,0.09,0.19,0.30,0.62,0.72,0.82,0.91,0.99].forEach(tx => {
+      this._drawTree(tx*W, H*0.6, H*0.20, '#12400e','#1a5e14');
+    });
+
+    // Ground
+    const grd = ctx.createLinearGradient(0,H*0.62,0,H);
+    grd.addColorStop(0, '#3c9430'); grd.addColorStop(0.3,'#2a7420');
+    grd.addColorStop(0.6,'#1e5814'); grd.addColorStop(1,'#0e2c08');
+    ctx.fillStyle = grd; ctx.fillRect(0, H*0.62, W, H*0.38);
+
+    // Ground lines
+    for (let i=0;i<4;i++) {
+      ctx.fillStyle = 'rgba(0,0,0,0.1)';
+      ctx.fillRect(0, H*(0.62+i*0.08), W, 1.5);
+    }
+
+    // Grass tufts
+    this._drawGrassTufts();
+
+    // Front trees (edges)
+    [[0.02,H*0.66,H*0.44,'#0a2e06','#163810'],
+     [0.11,H*0.63,H*0.36,'#0c3408','#18481c'],
+     [0.79,H*0.64,H*0.40,'#0a2e06','#163810'],
+     [0.88,H*0.62,H*0.44,'#0c3408','#18481c'],
+     [0.97,H*0.66,H*0.37,'#0a2e06','#163810']].forEach(([tx,ty,th,d,l]) => {
+      this._drawTree(tx*W, ty, th, d, l);
+    });
+
+    // Foreground grass edge
+    ctx.fillStyle = '#2a7020';
+    ctx.beginPath();
+    ctx.moveTo(0, H*0.64);
+    for (let gx=0; gx<W; gx+=12) {
+      ctx.lineTo(gx, H*0.64 - 4 - Math.sin(gx*0.08)*3);
+      ctx.lineTo(gx+6, H*0.64 + 2);
+    }
+    ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  }
+
+  _drawTree(cx, baseY, tH, dark, light) {
+    const ctx = this.ctx;
+    const tW = tH * 0.52;
+    ctx.fillStyle = '#3c1a06';
+    ctx.fillRect(cx-tH*0.04, baseY-tH*0.22, tH*0.08, tH*0.22+4);
+    for (let lay=0;lay<3;lay++) {
+      const ly = baseY - tH*(0.26 + lay*0.3);
+      const lw = tW*(1.05 - lay*0.17);
+      const lh = tH*0.38;
+      ctx.fillStyle = dark;
+      ctx.beginPath(); ctx.moveTo(cx,ly-lh); ctx.lineTo(cx+lw*0.52,ly+lh*0.08); ctx.lineTo(cx-lw*0.52,ly+lh*0.08); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = light;
+      ctx.beginPath(); ctx.moveTo(cx-lw*0.52,ly-lh*0.12); ctx.lineTo(cx,ly-lh); ctx.lineTo(cx,ly+lh*0.08); ctx.lineTo(cx-lw*0.52,ly+lh*0.08); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  _drawGrassTufts() {
+    const { ctx, W, H, frame } = this;
+    [120,155,210,265,310,365,420,475,520].forEach((tx,i) => {
+      const ty = H*0.645;
+      ctx.strokeStyle = '#54b032'; ctx.lineWidth = 1.8;
+      for (let g=0;g<3;g++) {
+        const ang = -0.6 + g*0.55 + Math.sin(frame*0.04+i+g)*0.1;
+        ctx.beginPath();
+        ctx.moveTo(tx+g*5, ty);
+        ctx.lineTo(tx+g*5 + Math.sin(ang)*9, ty-12+Math.cos(ang)*3);
+        ctx.stroke();
+      }
+    });
+  }
+
+  // ── CAVE BACKGROUND ───────────────────────────────────────
+  _bgCave() {
+    const { ctx, W, H, frame } = this;
+
+    // Dark base
+    const bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#08060a'); bg.addColorStop(0.4,'#100e0e');
+    bg.addColorStop(0.7,'#181614'); bg.addColorStop(1,'#221e18');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+    // Back wall stone blocks
+    ctx.fillStyle = '#161210';
+    ctx.fillRect(0,0,W,H*0.72);
+    for (let row=0;row<7;row++) {
+      for (let col=0;col<11;col++) {
+        const bx = col*60 + (row%2===0?0:30);
+        const by = row*22;
+        ctx.fillStyle = `rgba(255,255,255,${(row+col)%3===0?0.04:0.015})`;
+        ctx.fillRect(bx+1, by+1, 58, 20);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(bx, by, 60, 1.5);
+        ctx.fillRect(bx, by, 1.5, 22);
+      }
+    }
+
+    // Crystal formations
+    this._drawCrystals(W*0.14, H*0.56, '#9040a8', frame);
+    this._drawCrystals(W*0.71, H*0.50, '#4060cc', frame+5);
+    this._drawCrystals(W*0.55, H*0.60, '#6040a0', frame+3);
+
+    // Torches
+    this._drawTorch(W*0.22, H*0.30, frame);
+    this._drawTorch(W*0.78, H*0.30, frame+9);
+
+    // Stalactites
+    [0.06,0.14,0.22,0.31,0.40,0.50,0.60,0.69,0.78,0.86,0.93].forEach((sx,i) => {
+      const len = H*(0.12 + (i%4)*0.055);
+      const wid = 10 + (i%3)*5;
+      ctx.fillStyle = '#1a1614';
+      ctx.beginPath(); ctx.moveTo(sx*W-wid/2,0); ctx.lineTo(sx*W+wid/2,0); ctx.lineTo(sx*W,len); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#242018';
+      ctx.fillRect(sx*W-2,0,4,len*0.55);
+      // Drip highlight
+      ctx.fillStyle = '#302820';
+      ctx.fillRect(sx*W-1,0,2,3);
+    });
+
+    // Crystal ambient glow
+    [[W*0.14,H*0.56,'#a040b8'],[W*0.71,H*0.50,'#4060cc']].forEach(([gx,gy,col]) => {
+      const alpha = 0.12 + Math.sin(frame*0.055)*0.04;
+      const glow = ctx.createRadialGradient(gx,gy,5,gx,gy,90);
+      glow.addColorStop(0, col.replace('#','rgba(').replace(/(..)(..)(..)/, (_,r,g,b)=>`rgba(${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)},${alpha})`));
+      glow.addColorStop(1, 'transparent');
+      try { ctx.fillStyle = glow; ctx.fillRect(gx-90,gy-90,180,180); } catch(e) {}
+      const g2 = ctx.createRadialGradient(gx,gy,5,gx,gy,90);
+      g2.addColorStop(0, `rgba(160,100,220,${alpha})`);
+      g2.addColorStop(1, 'transparent');
+      ctx.fillStyle = g2; ctx.fillRect(gx-90,gy-90,180,180);
+    });
+
+    // Floor
+    const floor = ctx.createLinearGradient(0,H*0.72,0,H);
+    floor.addColorStop(0,'#2a2218'); floor.addColorStop(0.5,'#201a10'); floor.addColorStop(1,'#120e08');
+    ctx.fillStyle = floor; ctx.fillRect(0,H*0.72,W,H*0.28);
+    // Floor cracks/tiles
+    for (let tx=0;tx<W;tx+=44) {
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(tx,H*0.72,1,H*0.28);
+    }
+    for (let ty=0;ty<5;ty++) {
+      ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(0,H*(0.72+ty*0.056),W,1);
+    }
+  }
+
+  _drawTorch(x, y, frame) {
+    const ctx = this.ctx;
+    // Wall bracket
+    ctx.fillStyle = '#604828';
+    ctx.fillRect(x-5,y,10,14);
+    ctx.fillStyle = '#4a3418';
+    ctx.fillRect(x-4,y+2,8,10);
+    // Flame glow
+    const flicker = Math.sin(frame*0.22)*3;
+    const glow = ctx.createRadialGradient(x,y-8,2,x,y-8,38);
+    glow.addColorStop(0,`rgba(255,160,32,${0.22+Math.sin(frame*0.28)*0.07})`);
+    glow.addColorStop(1,'transparent');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x,y-8,38,0,Math.PI*2); ctx.fill();
+    // Flame layers
+    [[12+flicker,'#cc3800'],[9+flicker,'#f07000'],[5+flicker,'#ffcc00']].forEach(([fh,col])=>{
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(x,y-fh); ctx.lineTo(x+5,y-1); ctx.lineTo(x-5,y-1); ctx.closePath(); ctx.fill();
+    });
+  }
+
+  _drawCrystals(cx, cy, color, frame) {
+    const ctx = this.ctx;
+    const pulse = 0.7 + Math.sin(frame*0.055)*0.15;
+    [[0,0,13,26],[-17,14,9,20],[19,10,11,22]].forEach(([dx,dy,cw,ch]) => {
+      ctx.save(); ctx.translate(cx+dx, cy+dy);
+      const r=parseInt(color.slice(1,3),16), g=parseInt(color.slice(3,5),16), b=parseInt(color.slice(5,7),16);
+      ctx.fillStyle = `rgba(${r},${g},${b},${pulse})`;
+      ctx.beginPath(); ctx.moveTo(0,-ch); ctx.lineTo(cw/2,0); ctx.lineTo(0,ch*0.18); ctx.lineTo(-cw/2,0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.beginPath(); ctx.moveTo(-cw*0.2,-ch); ctx.lineTo(0,-ch*0.3); ctx.lineTo(-cw*0.42,0); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  // ── CASTLE BACKGROUND ─────────────────────────────────────
+  _bgCastle() {
+    const { ctx, W, H, frame } = this;
+
+    // Void
+    const bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#030010'); bg.addColorStop(0.5,'#06001a'); bg.addColorStop(1,'#0e0020');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+    // Energy clouds
+    for (let i=0;i<4;i++) {
+      const cx2 = W*(0.2+i*0.2);
+      const cy2 = H*0.28;
+      const phase = frame*0.018+i*1.8;
+      const gx2 = cx2+Math.cos(phase)*22, gy2 = cy2+Math.sin(phase)*11;
+      const eg = ctx.createRadialGradient(gx2,gy2,5,gx2,gy2,90);
+      eg.addColorStop(0,`rgba(100,0,180,${0.16+Math.sin(phase)*0.06})`);
+      eg.addColorStop(0.5,`rgba(50,0,90,0.08)`);
+      eg.addColorStop(1,'transparent');
+      ctx.fillStyle = eg; ctx.fillRect(0,0,W,H*0.8);
+    }
+
+    // Stone pillars
+    [0.10, 0.90].forEach(px => {
+      const x=px*W, pw=32;
+      const pg = ctx.createLinearGradient(x-pw/2,0,x+pw/2,0);
+      pg.addColorStop(0,'#150e20'); pg.addColorStop(0.3,'#1e1430'); pg.addColorStop(0.7,'#160c1e'); pg.addColorStop(1,'#0e0818');
+      ctx.fillStyle = pg; ctx.fillRect(x-pw/2,0,pw,H*0.78);
+      for (let sy=0;sy<H*0.78;sy+=32) {
+        ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x-pw/2,sy,pw,2);
+      }
+      ctx.fillStyle='rgba(80,40,120,0.3)'; ctx.fillRect(x-pw/2,0,3,H*0.78);
+    });
+
+    // Central energy vortex
+    const cX=W*0.64, cY=H*0.35;
+    const pulse = 0.85+Math.sin(frame*0.07)*0.15;
+    const core = ctx.createRadialGradient(cX,cY,0,cX,cY,65*pulse);
+    core.addColorStop(0,'rgba(220,120,255,0.65)'); core.addColorStop(0.35,'rgba(130,0,200,0.3)');
+    core.addColorStop(0.65,'rgba(60,0,100,0.15)'); core.addColorStop(1,'transparent');
+    ctx.fillStyle=core; ctx.fillRect(cX-80,cY-80,160,160);
+    // Rings
+    for (let r=1;r<=4;r++) {
+      ctx.strokeStyle=`rgba(200,80,255,${0.45-r*0.08})`; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(cX,cY,r*16*pulse,0,Math.PI*2); ctx.stroke();
+    }
+    // Core dot
+    ctx.fillStyle='rgba(240,200,255,0.9)';
+    ctx.beginPath(); ctx.arc(cX,cY,4*pulse,0,Math.PI*2); ctx.fill();
+
+    // Flying particles
+    for (let p=0;p<16;p++) {
+      const px=((W*(p*0.065+0.02)+frame*(0.28+p*0.018))%W);
+      const py=H*0.08+Math.sin(frame*0.04+p*0.85)*H*0.28;
+      const pa=0.28+Math.sin(frame*0.1+p)*0.14;
+      ctx.fillStyle=`rgba(160,80,255,${pa})`;
+      ctx.beginPath(); ctx.arc(px,py,1.8,0,Math.PI*2); ctx.fill();
+    }
+
+    // Floor
+    const fl = ctx.createLinearGradient(0,H*0.68,0,H);
+    fl.addColorStop(0,'#1c1030'); fl.addColorStop(0.5,'#140c24'); fl.addColorStop(1,'#0c0818');
+    ctx.fillStyle=fl; ctx.fillRect(0,H*0.68,W,H*0.32);
+    // Perspective floor tiles
+    ctx.strokeStyle='rgba(80,40,120,0.35)'; ctx.lineWidth=1;
+    for (let fy=0;fy<6;fy++) { ctx.beginPath(); ctx.moveTo(0,H*(0.68+fy*0.052)); ctx.lineTo(W,H*(0.68+fy*0.052)); ctx.stroke(); }
+    for (let fv=0;fv<=8;fv++) { ctx.beginPath(); ctx.moveTo(W/2,H*0.68); ctx.lineTo(fv*W/8,H); ctx.stroke(); }
+  }
+
+  // ── CHARACTER DRAWINGS ────────────────────────────────────
+  // All drawn with feet at (0,0), extending upward. Scale applied externally.
+
+  _c_hero(ctx) {
+    // Scale 2.4 — blue plate armor hero, side/back view facing right
+    ctx.save(); ctx.scale(2.4,2.4);
+    // --- Boots ---
+    ctx.fillStyle='#1c2e70'; ctx.fillRect(-8,18,7,6); ctx.fillRect(1,18,7,6);
+    ctx.fillStyle='#283ea0'; ctx.fillRect(-9,15,7,5); ctx.fillRect(0,15,7,5);
+    // --- Legs ---
+    ctx.fillStyle='#2e4aa8'; ctx.fillRect(-7,6,6,12); ctx.fillRect(1,6,6,12);
+    ctx.fillStyle='#1e3488'; ctx.fillRect(-8,8,8,8); ctx.fillRect(0,8,8,8);
+    // --- Belt ---
+    ctx.fillStyle='#7a4a10'; ctx.fillRect(-10,4,20,4);
+    ctx.fillStyle='#c89828'; ctx.fillRect(-2,5,4,3);
+    // --- Body/Armor ---
+    ctx.fillStyle='#3a60cc';
+    ctx.fillRect(-10,-10,20,16);
+    ctx.fillStyle='#2848a8'; ctx.fillRect(-10,-1,20,2);
+    ctx.fillStyle='#5070d8'; ctx.fillRect(-8,-10,5,7);
+    ctx.fillStyle='#2040a0'; ctx.fillRect(3,-10,5,7);
+    // --- Pauldrons ---
+    ctx.fillStyle='#4868c8'; ctx.fillRect(-14,-12,6,8); ctx.fillRect(8,-12,6,8);
+    ctx.fillStyle='#6088e0'; ctx.fillRect(-14,-12,6,3); ctx.fillRect(8,-12,6,3);
+    // --- Neck ---
+    ctx.fillStyle='#e8b870'; ctx.fillRect(-3,-15,6,6);
+    // --- Head ---
+    ctx.fillStyle='#f0c880'; ctx.fillRect(-6,-25,12,12);
+    ctx.fillStyle='#c8904a'; ctx.fillRect(-6,-14,12,1);
+    // --- Hair ---
+    ctx.fillStyle='#281008'; ctx.fillRect(-7,-26,14,4); ctx.fillRect(-7,-26,2,8); ctx.fillRect(5,-26,2,6);
+    // --- Helmet ---
+    ctx.fillStyle='#3858c0'; ctx.fillRect(-8,-30,16,8);
+    ctx.fillStyle='#5070d0'; ctx.fillRect(-6,-30,12,3);
+    ctx.fillStyle='#7090e0'; ctx.fillRect(-2,-35,4,7);
+    ctx.fillStyle='#90b0f0'; ctx.fillRect(-1,-33,2,4);
+    // --- Face ---
+    ctx.fillStyle='#1a1838'; ctx.fillRect(-3,-22,3,3); ctx.fillRect(1,-22,3,3);
+    ctx.fillStyle='#ffffff'; ctx.fillRect(-2,-22,1,1); ctx.fillRect(2,-22,1,1);
+    ctx.fillStyle='#c87848'; ctx.fillRect(-2,-17,4,2);
+    // --- Sword ---
+    ctx.save(); ctx.translate(14,-10); ctx.rotate(0.18);
+    ctx.fillStyle='#c8c8d8'; ctx.fillRect(-2,-22,4,28);
+    ctx.fillStyle='#e8e8f8'; ctx.fillRect(-1,-22,1,22);
+    ctx.fillStyle='#c8a020'; ctx.fillRect(-7,-1,14,4);
+    ctx.fillStyle='#d0b028'; ctx.fillRect(-1,2,2,7);
+    ctx.restore();
+    ctx.restore();
+  }
+
+  _c_erina(ctx) {
+    // Scale 2.2 — purple mage, witch hat, staff
+    ctx.save(); ctx.scale(2.2,2.2);
+    // --- Robe bottom ---
+    ctx.fillStyle='#5a14a0'; ctx.fillRect(-7,6,14,18);
+    [[0,'#4a0e90'],[5,'#5e18aa'],[10,'#4a0e90']].forEach(([dx,c])=>{ctx.fillStyle=c;ctx.fillRect(-7+dx,12,5,12);});
+    // --- Sash ---
+    ctx.fillStyle='#f0c038'; ctx.fillRect(-8,4,16,3);
+    // --- Body ---
+    ctx.fillStyle='#7020c0'; ctx.fillRect(-8,-8,16,14);
+    ctx.fillStyle='#9040d8'; ctx.fillRect(-2,-8,4,14);
+    ctx.fillStyle='#4a10908'; ctx.fillStyle='#5818a8'; ctx.fillRect(-7,-8,3,8);
+    // --- Sleeves ---
+    ctx.fillStyle='#6018a8'; ctx.fillRect(-12,-6,6,12); ctx.fillRect(6,-6,6,12);
+    ctx.fillStyle='#4a0e88'; ctx.fillRect(-13,-4,5,8); ctx.fillRect(8,-4,5,8);
+    // --- Neck ---
+    ctx.fillStyle='#f0c888'; ctx.fillRect(-2,-12,4,5);
+    // --- Head ---
+    ctx.fillStyle='#f8d0a8'; ctx.fillRect(-5,-22,10,11);
+    ctx.fillStyle='#d8a870'; ctx.fillRect(-5,-12,10,1);
+    // --- Hair ---
+    ctx.fillStyle='#28083a'; ctx.fillRect(-6,-22,12,4); ctx.fillRect(-6,-22,2,7); ctx.fillRect(4,-22,2,7);
+    // --- Eyes ---
+    ctx.fillStyle='#6810a0'; ctx.fillRect(-3,-19,2,2); ctx.fillRect(1,-19,2,2);
+    ctx.fillStyle='#fff'; ctx.fillRect(-2,-19,1,1); ctx.fillRect(2,-19,1,1);
+    ctx.fillStyle='#e888c8'; ctx.fillRect(-2,-16,4,2);
+    // --- Hat brim ---
+    ctx.fillStyle='#7820c0'; ctx.fillRect(-10,-23,20,4);
+    ctx.fillStyle='#9030d8'; ctx.fillRect(-8,-23,16,2);
+    // --- Hat cone ---
+    ctx.fillStyle='#7020c0';
+    ctx.beginPath(); ctx.moveTo(-7,-23); ctx.lineTo(-1,-42); ctx.lineTo(2,-42); ctx.lineTo(7,-23); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#9030d8';
+    ctx.beginPath(); ctx.moveTo(-5,-23); ctx.lineTo(-1,-42); ctx.lineTo(1,-42); ctx.lineTo(3,-23); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#f0d040'; ctx.fillRect(-1,-38,2,3);
+    // --- Staff ---
+    ctx.save(); ctx.translate(12,0); ctx.rotate(-0.12);
+    ctx.fillStyle='#c8900e'; ctx.fillRect(-1,-36,2,50);
+    ctx.fillStyle='#b84ae0'; ctx.beginPath(); ctx.arc(0,-36,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#d878f8'; ctx.beginPath(); ctx.arc(-2,-38,3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(200,120,255,0.3)';
+    const sg=ctx.createRadialGradient(0,-36,2,0,-36,14); sg.addColorStop(0,'rgba(200,120,255,0.4)'); sg.addColorStop(1,'transparent');
+    ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(0,-36,14,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  _c_gard(ctx) {
+    // Scale 2.5 — heavy plate warrior, shield left, sword right
+    ctx.save(); ctx.scale(2.5,2.5);
+    // --- Greaves/boots ---
+    ctx.fillStyle='#40485a'; ctx.fillRect(-9,17,9,6); ctx.fillRect(0,17,9,6);
+    ctx.fillStyle='#6878a8'; ctx.fillRect(-10,11,10,8); ctx.fillRect(0,11,10,8);
+    // --- Legs ---
+    ctx.fillStyle='#505868'; ctx.fillRect(-8,4,7,9); ctx.fillRect(1,4,7,9);
+    // --- Skirt armor ---
+    ctx.fillStyle='#606878'; ctx.fillRect(-9,1,18,5);
+    [[0,'#585868'],[6,'#686878'],[12,'#585868']].forEach(([dx,c])=>{ctx.fillStyle=c;ctx.fillRect(-9+dx,1,6,5);});
+    // --- Body plate ---
+    ctx.fillStyle='#8898b0'; ctx.fillRect(-11,-13,22,16);
+    ctx.fillStyle='#9ab0c8'; ctx.fillRect(-9,-13,8,8);
+    ctx.fillStyle='#606878'; ctx.fillRect(-11,-2,22,2); ctx.fillRect(-2,-13,4,8);
+    ctx.fillStyle='#b0c0d0'; ctx.fillRect(-11,-13,3,16);
+    // --- Pauldrons ---
+    ctx.fillStyle='#a0b0c8'; ctx.fillRect(-15,-16,8,12); ctx.fillRect(7,-16,8,12);
+    ctx.fillStyle='#c0d0e0'; ctx.fillRect(-15,-16,8,4); ctx.fillRect(7,-16,8,4);
+    ctx.fillStyle='#707888'; ctx.fillRect(-14,-14,6,8); ctx.fillRect(8,-14,6,8);
+    // --- Shield (left) ---
+    ctx.fillStyle='#3050b0'; ctx.fillRect(-24,-14,13,22);
+    ctx.fillStyle='#4060c8'; ctx.fillRect(-24,-14,13,6);
+    ctx.fillStyle='#c0a820'; ctx.beginPath(); ctx.arc(-17,-3,5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#e0c828'; ctx.beginPath(); ctx.arc(-17,-3,3,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#6080d0'; ctx.lineWidth=1.5; ctx.strokeRect(-24,-14,13,22);
+    // --- Neck ---
+    ctx.fillStyle='#d0a060'; ctx.fillRect(-3,-16,6,5);
+    // --- Head ---
+    ctx.fillStyle='#d8a060'; ctx.fillRect(-6,-26,12,11);
+    ctx.fillStyle='#b07840'; ctx.fillRect(-6,-16,12,1);
+    // Scar
+    ctx.fillStyle='#9a5830'; ctx.fillRect(2,-24,1,6);
+    // Eyes
+    ctx.fillStyle='#1a1820'; ctx.fillRect(-3,-23,3,2); ctx.fillRect(1,-23,3,2);
+    ctx.fillStyle='#fff'; ctx.fillRect(-2,-23,1,1); ctx.fillRect(2,-23,1,1);
+    // --- Helmet ---
+    ctx.fillStyle='#8090a8'; ctx.fillRect(-8,-32,16,9);
+    ctx.fillStyle='#a0b0c8'; ctx.fillRect(-6,-32,12,4);
+    ctx.fillStyle='#606878'; ctx.fillRect(-7,-26,14,4);
+    ctx.fillStyle='#202830'; ctx.fillRect(-5,-25,4,2); ctx.fillRect(1,-25,4,2);
+    ctx.fillStyle='#b0c0d0'; ctx.fillRect(-1,-36,2,6);
+    ctx.fillStyle='#c0d0e0'; ctx.fillRect(-1,-34,2,3);
+    // --- Sword ---
+    ctx.save(); ctx.translate(13,-16); ctx.rotate(-0.25);
+    ctx.fillStyle='#b8c0d0'; ctx.fillRect(-2,-26,4,30);
+    ctx.fillStyle='#d0d8e8'; ctx.fillRect(-1,-26,1,26);
+    ctx.fillStyle='#d8c040'; ctx.fillRect(-7,0,14,4);
+    ctx.fillStyle='#c8b028'; ctx.fillRect(-1,3,2,8);
+    ctx.restore();
+    ctx.restore();
+  }
+
+  _c_luna(ctx) {
+    // Scale 2.2 — white/teal oracle healer, moon staff
+    ctx.save(); ctx.scale(2.2,2.2);
+    // --- Robe ---
+    ctx.fillStyle='#d0e8c8'; ctx.fillRect(-7,4,14,20);
+    [[0,'#c0d8b0'],[5,'#d0e8c0'],[10,'#c0d8b0']].forEach(([dx,c])=>{ctx.fillStyle=c;ctx.fillRect(-7+dx,12,5,12);});
+    // --- Teal trim ---
+    ctx.fillStyle='#28c0b0'; ctx.fillRect(-9,4,3,20); ctx.fillRect(6,4,3,20); ctx.fillRect(-9,14,18,3);
+    // --- Body ---
+    ctx.fillStyle='#e0f0d8'; ctx.fillRect(-8,-8,16,14);
+    // --- Cross symbol ---
+    ctx.fillStyle='#28c0b0'; ctx.fillRect(-1,-6,2,8); ctx.fillRect(-3,-4,6,2);
+    // --- Sleeves ---
+    ctx.fillStyle='#d0e8c0'; ctx.fillRect(-11,-6,5,10); ctx.fillRect(6,-6,5,10);
+    ctx.fillStyle='#28c0b0'; ctx.fillRect(-12,-4,3,6); ctx.fillRect(9,-4,3,6);
+    // --- Neck ---
+    ctx.fillStyle='#fce8c8'; ctx.fillRect(-2,-12,4,5);
+    // --- Head ---
+    ctx.fillStyle='#fce8c8'; ctx.fillRect(-5,-23,10,12);
+    ctx.fillStyle='#e8c8a0'; ctx.fillRect(-5,-12,10,1);
+    // Hair (silver)
+    ctx.fillStyle='#c8d0e0'; ctx.fillRect(-6,-25,12,5); ctx.fillRect(-7,-23,2,8); ctx.fillRect(5,-23,2,8);
+    // Eyes (green)
+    ctx.fillStyle='#18a860'; ctx.fillRect(-3,-20,2,2); ctx.fillRect(1,-20,2,2);
+    ctx.fillStyle='#fff'; ctx.fillRect(-2,-20,1,1); ctx.fillRect(2,-20,1,1);
+    ctx.fillStyle='#e8c098'; ctx.fillRect(-2,-18,4,2);
+    // --- Veil/headpiece ---
+    ctx.fillStyle='#f0f4f0'; ctx.fillRect(-8,-26,16,4);
+    ctx.fillStyle='#d8e0d8'; ctx.fillRect(-9,-24,3,12); ctx.fillRect(6,-24,3,12);
+    // Moon circlet
+    ctx.fillStyle='#c8d8e8'; ctx.beginPath(); ctx.arc(0,-28,5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#080c1a'; ctx.beginPath(); ctx.arc(2,-28,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#a8c0d8'; ctx.beginPath(); ctx.arc(0,-28,2,0,Math.PI*2); ctx.fill();
+    // --- Moon staff (left) ---
+    ctx.save(); ctx.translate(-13,-4); ctx.rotate(0.14);
+    ctx.fillStyle='#a0b0a8'; ctx.fillRect(-1,-32,2,46);
+    ctx.fillStyle='#c0d0c8'; ctx.beginPath(); ctx.arc(0,-32,6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#06101a'; ctx.beginPath(); ctx.arc(2,-32,5,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#a0c0e0'; ctx.beginPath(); ctx.arc(0,-32,3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(160,200,240,0.3)';
+    const mg=ctx.createRadialGradient(0,-32,2,0,-32,14); mg.addColorStop(0,'rgba(160,200,240,0.35)'); mg.addColorStop(1,'transparent');
+    ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(0,-32,14,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+}
+
+// Global battle renderer instance
+let battleRenderer = null;
+
 class Game {
   constructor() {
     this.screen = 'TITLE';
@@ -119,12 +730,29 @@ class Game {
   // ── Screens ───────────────────────────────────────────────
   render() {
     const c = $('game-container');
+    // Stop canvas if leaving battle
+    if (this.screen !== 'BATTLE' && battleRenderer) {
+      battleRenderer.stop(); battleRenderer = null;
+    }
     switch (this.screen) {
       case 'TITLE':   c.innerHTML = this.renderTitle();  break;
       case 'MAP':     c.innerHTML = this.renderMap();    break;
       case 'TOWN':    c.innerHTML = this.renderTown();   break;
       case 'DUNGEON': c.innerHTML = this.renderDungeon(); break;
-      case 'BATTLE':  c.innerHTML = this.renderBattle(); break;
+      case 'BATTLE':
+        c.innerHTML = this.renderBattle();
+        // Mount canvas battle renderer
+        requestAnimationFrame(() => {
+          const env = document.getElementById('battle-env');
+          if (env) {
+            if (!battleRenderer) battleRenderer = new BattleRenderer();
+            else battleRenderer.stop();
+            battleRenderer = new BattleRenderer();
+            battleRenderer.mount(env);
+            battleRenderer.start();
+          }
+        });
+        break;
       case 'STATUS':  c.innerHTML = this.renderStatus(); break;
       case 'SHOP':    c.innerHTML = this.renderShop();   break;
       case 'GAMEOVER':c.innerHTML = this.renderGameOver(); break;
@@ -721,10 +1349,8 @@ class Game {
     return `<div id="battle-screen">
       <div class="battle-env ${bgClass}" id="battle-env">
 
-        <!-- Party sprites (CT-style, left side) -->
-        <div class="battle-party-area">${this._renderPartyBattleSprites()}</div>
-
-        <!-- Enemy (right side) -->
+        <!-- Canvas renders background + party sprites (z-index:2) -->
+        <!-- Enemy SVG overlay (z-index:10) -->
         <div class="battle-enemy" id="battle-enemy">
           ${spriteHtml}
           <div class="enemy-shadow"></div>
@@ -865,12 +1491,8 @@ class Game {
 
   cmdAttack() {
     musicEngine.sfx('attack');
-    // Trigger hero attack animation
-    const heroSlot = document.getElementById('bp-hero');
-    if (heroSlot) {
-      heroSlot.classList.add('bp-attacking');
-      setTimeout(() => heroSlot.classList.remove('bp-attacking'), 520);
-    }
+    // Canvas hero attack animation
+    if (battleRenderer) battleRenderer.triggerAnim('hero', 'attack');
     // Apply damage mid-animation
     setTimeout(() => {
       const m = this.battle.monster;
@@ -878,21 +1500,19 @@ class Game {
       m.hp -= dmg;
       this.addBattleLog(`${this.player.name} の攻撃！ ${m.name} に ${dmg} のダメージ！`);
       this.showDmgNum(dmg, 'enemy');
-      // Flash enemy
-      requestAnimationFrame(() => {
-        const enemy = document.getElementById('battle-enemy');
-        if (enemy) {
-          const f = document.createElement('div');
-          f.style.cssText = 'position:absolute;top:-10px;left:-10px;right:-10px;bottom:-10px;background:rgba(255,255,255,0.75);border-radius:50%;pointer-events:none;animation:encounterFlash 0.2s ease-out forwards;z-index:10';
-          enemy.style.position = 'relative';
-          enemy.appendChild(f);
-          setTimeout(() => f.remove(), 220);
-        }
-      });
+      // Flash enemy sprite
+      const enemy = document.getElementById('battle-enemy');
+      if (enemy) {
+        const f = document.createElement('div');
+        f.style.cssText = 'position:absolute;inset:-8px;background:rgba(255,255,255,0.8);border-radius:50%;pointer-events:none;z-index:15;animation:encounterFlash 0.22s ease-out forwards';
+        enemy.style.position = 'relative';
+        enemy.appendChild(f);
+        setTimeout(() => f.remove(), 240);
+      }
       this.checkMonsterPhase2();
       if (m.hp <= 0) { m.hp = 0; this.winBattle(); return; }
       this.monsterTurn();
-    }, 260);
+    }, 280);
   }
 
   cmdMagic() { musicEngine.sfx('cursor'); this.subMenu = 'magic'; this.render(); }
@@ -1287,11 +1907,7 @@ class Game {
 
   shakeHero() {
     setTimeout(() => {
-      const heroSlot = document.getElementById('bp-hero');
-      if (heroSlot) {
-        heroSlot.classList.add('bp-hurting');
-        setTimeout(() => heroSlot.classList.remove('bp-hurting'), 320);
-      }
+      if (battleRenderer) battleRenderer.triggerAnim('hero', 'hurt');
     }, 50);
   }
 
