@@ -19,8 +19,9 @@ class BattleRenderer {
     this.raf    = null;
     this.frame  = 0;
     this.anims  = {};
+    this.spellFx = null;
     this.W = 640;
-    this.H = 302;
+    this.H = 310;
   }
 
   mount(envEl) {
@@ -51,8 +52,12 @@ class BattleRenderer {
   }
 
   triggerAnim(id, type) {
-    const dur = type === 'attack' ? 30 : 20;
+    const dur = type === 'attack' ? 36 : 24;
     this.anims[id] = { type, start: this.frame, dur };
+  }
+
+  triggerSpell(spellType) {
+    this.spellFx = { type: spellType, start: this.frame, dur: 70 };
   }
 
   _getAnim(id) {
@@ -62,9 +67,9 @@ class BattleRenderer {
     if (t >= 1) { delete this.anims[id]; return { x: 0, y: 0 }; }
     if (a.type === 'attack') {
       const curve = t < 0.45 ? t / 0.45 : 1 - (t - 0.45) / 0.55;
-      return { x: curve * this.W * 0.36, y: -curve * 12 };
+      return { x: curve * this.W * 0.42, y: -curve * 22 };
     }
-    if (a.type === 'hurt') return { x: Math.sin(t * Math.PI * 5) * 10, y: 0 };
+    if (a.type === 'hurt') return { x: Math.sin(t * Math.PI * 6) * 14, y: Math.sin(t * Math.PI * 3) * 5 };
     return { x: 0, y: 0 };
   }
 
@@ -79,27 +84,35 @@ class BattleRenderer {
     else if (area === 'castle')  this._bgCastle();
     else                          this._bgForest();
 
-    // Draw party
+    // Spell effects drawn between background and characters
+    if (this.spellFx) {
+      const t = (frame - this.spellFx.start) / this.spellFx.dur;
+      if (t >= 1) this.spellFx = null;
+      else this._drawSpellFx(this.spellFx.type, t);
+    }
+
+    // Draw party members — CT-style perspective arrangement
+    // Each slot: x/y = feet position on canvas, sc = pixel scale
     const members = this._members(g);
-    const layout = [
-      { x: W*0.07, y: H*0.76 },
-      { x: W*0.20, y: H*0.82 },
-      { x: W*0.07, y: H*0.93 },
-      { x: W*0.20, y: H*0.97 },
+    const slots = [
+      { x: W*0.22, y: H*0.96, sc: 4.2 },   // hero  — front center-left
+      { x: W*0.07, y: H*0.84, sc: 3.5 },   // erina — behind far left
+      { x: W*0.37, y: H*0.92, sc: 4.4 },   // gard  — front right
+      { x: W*0.17, y: H*0.76, sc: 3.2 },   // luna  — far back
     ];
     members.forEach((m, i) => {
-      if (!layout[i]) return;
-      const bob  = Math.sin(frame * 0.05 + i * 1.3) * 2.2;
+      const sl = slots[i]; if (!sl) return;
+      const bob  = Math.sin(frame * 0.05 + i * 1.3) * 2.5;
       const anim = this._getAnim(m.id);
-      const x = layout[i].x + anim.x;
-      const y = layout[i].y + bob + anim.y;
-      this._drawShadow(x + 16, y + 4);
+      const px = sl.x + anim.x;
+      const py = sl.y + bob + anim.y;
+      this._drawShadow(px, py, sl.sc * 12);
       ctx.save();
       if (!m.alive) { ctx.globalAlpha = 0.22; ctx.filter = 'grayscale(100%)'; }
-      ctx.translate(x, y);
+      ctx.translate(px, py);
       const fn = this['_c_' + m.id];
-      if (fn) fn.call(this, ctx);
-      else this._c_hero(ctx);
+      if (fn) fn.call(this, ctx, sl.sc);
+      else this._c_hero(ctx, sl.sc);
       ctx.restore();
     });
   }
@@ -114,15 +127,159 @@ class BattleRenderer {
     return list;
   }
 
-  _drawShadow(cx, cy) {
+  _drawShadow(cx, cy, radius = 22) {
     const ctx = this.ctx;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
-    g.addColorStop(0, 'rgba(0,0,0,0.45)');
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    g.addColorStop(0, 'rgba(0,0,0,0.55)');
     g.addColorStop(1, 'transparent');
     ctx.fillStyle = g;
-    ctx.save(); ctx.scale(1, 0.3);
-    ctx.beginPath(); ctx.arc(cx, cy/0.3, 22, 0, Math.PI*2); ctx.fill();
+    ctx.save(); ctx.scale(1, 0.26);
+    ctx.beginPath(); ctx.arc(cx, cy/0.26, radius, 0, Math.PI*2); ctx.fill();
     ctx.restore();
+  }
+
+  // ── SPELL VISUAL EFFECTS ──────────────────────────────────
+  _drawSpellFx(type, t) {
+    const { ctx, W, H } = this;
+    const pulse = Math.sin(t * Math.PI);
+    const easeOut = 1 - (1 - t) * (1 - t);
+
+    if (type === 'fire') {
+      // Expanding fireball burst flying to enemy (right side)
+      const cx = W * 0.72, cy = H * 0.42;
+      const r = 190 * pulse;
+      const fg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      fg.addColorStop(0,    `rgba(255,220,80,${pulse*0.85})`);
+      fg.addColorStop(0.35, `rgba(255,80,20,${pulse*0.6})`);
+      fg.addColorStop(0.65, `rgba(180,20,0,${pulse*0.3})`);
+      fg.addColorStop(1,    'transparent');
+      ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H);
+      // Flying fireballs
+      for (let i = 0; i < 9; i++) {
+        const ft = (t * 1.8 + i * 0.13) % 1;
+        const fx = W * 0.2 + ft * W * 0.55;
+        const fy = H * 0.38 + Math.sin(ft * Math.PI * 3 + i) * H * 0.14;
+        const fr = (5 + i % 3 * 5) * pulse;
+        const flg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr);
+        flg.addColorStop(0, 'rgba(255,240,180,0.95)');
+        flg.addColorStop(0.5, 'rgba(255,100,20,0.75)');
+        flg.addColorStop(1, 'transparent');
+        ctx.fillStyle = flg; ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI*2); ctx.fill();
+      }
+      // Scorch marks at enemy
+      ctx.strokeStyle = `rgba(255,120,20,${pulse*0.6})`; ctx.lineWidth = 2;
+      for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 0.4 + t * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.4);
+        ctx.stroke();
+      }
+    } else if (type === 'ice') {
+      const cx = W * 0.68, cy = H * 0.45;
+      const r = 200 * pulse;
+      const ig = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      ig.addColorStop(0,   `rgba(200,240,255,${pulse*0.75})`);
+      ig.addColorStop(0.4, `rgba(80,160,220,${pulse*0.5})`);
+      ig.addColorStop(0.7, `rgba(30,80,160,${pulse*0.25})`);
+      ig.addColorStop(1,   'transparent');
+      ctx.fillStyle = ig; ctx.fillRect(0, 0, W, H);
+      // Ice crystals
+      for (let i = 0; i < 12; i++) {
+        const px = W * (0.35 + (i % 5) * 0.12);
+        const py = H * 0.18 + Math.sin(t * Math.PI * 2 + i * 0.6) * H * 0.28;
+        const sz = (6 + i % 4 * 5) * pulse;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(t * Math.PI * 2 + i * 0.5);
+        ctx.strokeStyle = `rgba(180,220,255,${pulse*0.85})`; ctx.lineWidth = 1.5;
+        for (let a = 0; a < 6; a++) {
+          ctx.beginPath(); ctx.moveTo(0,0);
+          ctx.lineTo(Math.cos(a*Math.PI/3)*sz, Math.sin(a*Math.PI/3)*sz);
+          ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(Math.cos(a*Math.PI/3)*sz*0.5, Math.sin(a*Math.PI/3)*sz*0.5);
+          ctx.lineTo(Math.cos(a*Math.PI/3+0.4)*sz*0.7, Math.sin(a*Math.PI/3+0.4)*sz*0.7);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    } else if (type === 'thunder' || type === 'lightning') {
+      // Dramatic lightning bolt from sky
+      const ex = W * 0.70, ey = H * 0.55;
+      ctx.fillStyle = `rgba(220,220,255,${pulse*0.4})`; ctx.fillRect(0, 0, W, H);
+      for (let b = 0; b < 3; b++) {
+        ctx.save();
+        ctx.strokeStyle = b === 0 ? `rgba(255,255,255,${pulse*0.95})` : `rgba(180,180,255,${pulse*(0.7-b*0.2)})`;
+        ctx.lineWidth = b === 0 ? 4 : (3-b*0.8);
+        ctx.shadowColor = '#8080ff'; ctx.shadowBlur = b === 0 ? 25 : 10;
+        ctx.beginPath();
+        let bx = ex + (b-1) * 12;
+        ctx.moveTo(bx, 0);
+        for (let s = 0; s < 9; s++) {
+          bx += (Math.sin(s * 2.8 + b * 1.5) * 22);
+          ctx.lineTo(bx, ey * (s+1) / 9);
+        }
+        ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.restore();
+      }
+      const lg = ctx.createRadialGradient(ex, ey, 0, ex, ey, 70*pulse);
+      lg.addColorStop(0, `rgba(255,255,220,${pulse*0.9})`);
+      lg.addColorStop(0.4, `rgba(160,160,255,${pulse*0.5})`);
+      lg.addColorStop(1, 'transparent');
+      ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(ex, ey, 70*pulse, 0, Math.PI*2); ctx.fill();
+    } else if (type === 'heal' || type === 'healall') {
+      ctx.fillStyle = `rgba(80,200,80,${pulse*0.12})`; ctx.fillRect(0, 0, W*0.42, H);
+      for (let i = 0; i < 28; i++) {
+        const sx = W * (0.02 + (i % 9) * 0.045);
+        const sy = ((t * H * 1.6 + i * H / 14) % H);
+        const sr = (2.5 + i % 4 * 2) * pulse;
+        const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr*2.5);
+        sg.addColorStop(0, 'rgba(200,255,180,0.95)');
+        sg.addColorStop(0.4, 'rgba(100,220,80,0.7)');
+        sg.addColorStop(1, 'transparent');
+        ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, sr*2.5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = `rgba(255,255,200,${pulse*0.9})`;
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(t*Math.PI*4+i);
+        ctx.fillRect(-sr*0.4, -sr, sr*0.8, sr*2);
+        ctx.fillRect(-sr, -sr*0.4, sr*2, sr*0.8);
+        ctx.restore();
+      }
+    } else if (type === 'dark') {
+      const cx = W*0.65, cy = H*0.42;
+      const r = 230 * pulse;
+      const dg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      dg.addColorStop(0,   `rgba(90,0,140,${pulse*0.88})`);
+      dg.addColorStop(0.4, `rgba(45,0,80,${pulse*0.55})`);
+      dg.addColorStop(0.7, `rgba(20,0,40,${pulse*0.28})`);
+      dg.addColorStop(1,   'transparent');
+      ctx.fillStyle = dg; ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 8; i++) {
+        const angle = i * Math.PI / 4 + t * Math.PI;
+        ctx.save(); ctx.strokeStyle = `rgba(180,0,255,${pulse*0.75})`; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        for (let s = 0; s < 7; s++) {
+          const fr2 = s/6 * r * 0.85;
+          const wave = Math.sin(s*0.9 + t*12 + i) * 20;
+          ctx.lineTo(cx + Math.cos(angle)*fr2 + Math.cos(angle+Math.PI/2)*wave,
+                     cy + Math.sin(angle)*fr2 + Math.sin(angle+Math.PI/2)*wave);
+        }
+        ctx.stroke(); ctx.restore();
+      }
+    } else if (type === 'holy') {
+      ctx.fillStyle = `rgba(255,255,220,${pulse*0.22})`; ctx.fillRect(0, 0, W, H);
+      const ox = W*0.22, oy = -20;
+      for (let i = 0; i < 14; i++) {
+        const angle = (i/14)*Math.PI*2 + t*0.8;
+        const rayG = ctx.createLinearGradient(ox, oy, ox+Math.cos(angle)*280, oy+Math.sin(angle)*280);
+        rayG.addColorStop(0, `rgba(255,255,200,${pulse*0.55})`);
+        rayG.addColorStop(1, 'transparent');
+        ctx.fillStyle = rayG; ctx.save(); ctx.translate(ox, oy); ctx.rotate(angle);
+        ctx.fillRect(-3, 0, 6, 280*pulse); ctx.restore();
+      }
+      const hg = ctx.createRadialGradient(W*0.22, H*0.3, 0, W*0.22, H*0.3, 90*pulse);
+      hg.addColorStop(0, `rgba(255,255,220,${pulse*0.85})`);
+      hg.addColorStop(0.5, `rgba(200,220,255,${pulse*0.4})`);
+      hg.addColorStop(1, 'transparent');
+      ctx.fillStyle = hg; ctx.fillRect(0, 0, W, H);
+    }
   }
 
   // ── FOREST BACKGROUND ─────────────────────────────────────
@@ -423,9 +580,9 @@ class BattleRenderer {
   // ── CHARACTER DRAWINGS ────────────────────────────────────
   // All drawn with feet at (0,0), extending upward. Scale applied externally.
 
-  _c_hero(ctx) {
-    // Scale 2.4 — blue plate armor hero, side/back view facing right
-    ctx.save(); ctx.scale(2.4,2.4);
+  _c_hero(ctx, scale = 4.2) {
+    // Blue plate armor hero
+    ctx.save(); ctx.scale(scale, scale);
     // --- Boots ---
     ctx.fillStyle='#1c2e70'; ctx.fillRect(-8,18,7,6); ctx.fillRect(1,18,7,6);
     ctx.fillStyle='#283ea0'; ctx.fillRect(-9,15,7,5); ctx.fillRect(0,15,7,5);
@@ -470,9 +627,9 @@ class BattleRenderer {
     ctx.restore();
   }
 
-  _c_erina(ctx) {
-    // Scale 2.2 — purple mage, witch hat, staff
-    ctx.save(); ctx.scale(2.2,2.2);
+  _c_erina(ctx, scale = 3.5) {
+    // Purple mage, witch hat, staff
+    ctx.save(); ctx.scale(scale, scale);
     // --- Robe bottom ---
     ctx.fillStyle='#5a14a0'; ctx.fillRect(-7,6,14,18);
     [[0,'#4a0e90'],[5,'#5e18aa'],[10,'#4a0e90']].forEach(([dx,c])=>{ctx.fillStyle=c;ctx.fillRect(-7+dx,12,5,12);});
@@ -517,9 +674,9 @@ class BattleRenderer {
     ctx.restore();
   }
 
-  _c_gard(ctx) {
-    // Scale 2.5 — heavy plate warrior, shield left, sword right
-    ctx.save(); ctx.scale(2.5,2.5);
+  _c_gard(ctx, scale = 4.4) {
+    // Heavy plate warrior, shield left, sword right
+    ctx.save(); ctx.scale(scale, scale);
     // --- Greaves/boots ---
     ctx.fillStyle='#40485a'; ctx.fillRect(-9,17,9,6); ctx.fillRect(0,17,9,6);
     ctx.fillStyle='#6878a8'; ctx.fillRect(-10,11,10,8); ctx.fillRect(0,11,10,8);
@@ -570,9 +727,9 @@ class BattleRenderer {
     ctx.restore();
   }
 
-  _c_luna(ctx) {
-    // Scale 2.2 — white/teal oracle healer, moon staff
-    ctx.save(); ctx.scale(2.2,2.2);
+  _c_luna(ctx, scale = 3.2) {
+    // White/teal oracle healer, moon staff
+    ctx.save(); ctx.scale(scale, scale);
     // --- Robe ---
     ctx.fillStyle='#d0e8c8'; ctx.fillRect(-7,4,14,20);
     [[0,'#c0d8b0'],[5,'#d0e8c0'],[10,'#c0d8b0']].forEach(([dx,c])=>{ctx.fillStyle=c;ctx.fillRect(-7+dx,12,5,12);});
@@ -619,6 +776,379 @@ class BattleRenderer {
 
 // Global battle renderer instance
 let battleRenderer = null;
+
+// ============================================================
+//  DungeonRenderer — Canvas-based 3D perspective dungeon
+// ============================================================
+class DungeonRenderer {
+  constructor() {
+    this.canvas = null;
+    this.ctx    = null;
+    this.raf    = null;
+    this.frame  = 0;
+    this.W = 400;
+    this.H = 280;
+  }
+
+  mount(sceneEl) {
+    if (this.canvas) this.canvas.remove();
+    this.canvas = document.createElement('canvas');
+    this.canvas.width  = this.W;
+    this.canvas.height = this.H;
+    this.canvas.style.cssText =
+      'position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none;';
+    sceneEl.prepend(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+  }
+
+  start() {
+    this.stop();
+    const tick = () => {
+      this.frame++;
+      if (this.ctx) this._draw();
+      this.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  stop() {
+    if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+    if (this.canvas) { this.canvas.remove(); this.canvas = null; this.ctx = null; }
+  }
+
+  _draw() {
+    const g = window.game;
+    if (!g) return;
+    const { ctx, W, H, frame } = this;
+    ctx.clearRect(0, 0, W, H);
+
+    const area = g.areaId;
+    const isBoss = g.areas[area] && g.room >= g.areas[area].rooms && !g.areas[area].bossDefeated;
+
+    if (area === 'cave') this._drawCaveCorridor(isBoss);
+    else if (area === 'castle') this._drawCastleCorridor(isBoss);
+    else this._drawForestPath(isBoss);
+  }
+
+  // ── FOREST PATH ────────────────────────────────────────────
+  _drawForestPath(isBoss) {
+    const { ctx, W, H, frame } = this;
+    // Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+    sky.addColorStop(0, '#0d1f6a'); sky.addColorStop(0.5, '#1848b8'); sky.addColorStop(1, '#4888e8');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H * 0.55);
+
+    // Sun glow
+    if (!isBoss) {
+      const sg = ctx.createRadialGradient(W*0.5, H*0.18, 5, W*0.5, H*0.18, 70);
+      sg.addColorStop(0, 'rgba(255,240,160,0.9)'); sg.addColorStop(0.4, 'rgba(255,180,60,0.4)'); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(W*0.2, 0, W*0.6, H*0.4);
+      ctx.fillStyle = '#fff8d8'; ctx.beginPath(); ctx.arc(W*0.5, H*0.18, 18, 0, Math.PI*2); ctx.fill();
+    } else {
+      // Ominous red sky for boss
+      const bs = ctx.createLinearGradient(0, 0, 0, H*0.55);
+      bs.addColorStop(0, '#200008'); bs.addColorStop(1, '#601020');
+      ctx.fillStyle = bs; ctx.fillRect(0, 0, W, H*0.55);
+    }
+
+    // Clouds
+    [[0.15,0.12,28],[0.45,0.08,22],[0.72,0.15,25]].forEach(([cx, cy, r], i) => {
+      const ox = ((cx*W + frame*0.1*(i+1)) % (W+80)) - 40;
+      ctx.fillStyle = isBoss ? 'rgba(80,20,20,0.7)' : 'rgba(255,255,255,0.82)';
+      [[0,0,r],[r*0.7,0,r*0.6],[-r*0.55,r*0.2,r*0.5],[r*0.2,-r*0.3,r*0.45]].forEach(([dx,dy,rd]) => {
+        ctx.beginPath(); ctx.arc(ox+dx, cy*H+dy, rd, 0, Math.PI*2); ctx.fill();
+      });
+    });
+
+    // Far mountains
+    ctx.fillStyle = isBoss ? '#3a0808' : '#1a3e78';
+    ctx.beginPath(); ctx.moveTo(0, H*0.52);
+    [0,0.08,0.16,0.24,0.32,0.42,0.52,0.61,0.70,0.79,0.88,0.96,1.0].forEach((x,i) => {
+      const ps = [0.5,0.40,0.46,0.36,0.43,0.38,0.44,0.34,0.41,0.39,0.45,0.37,0.5];
+      ctx.lineTo(x*W, ps[i]*H);
+    });
+    ctx.lineTo(W,H*0.52); ctx.closePath(); ctx.fill();
+
+    // Ground
+    const gnd = ctx.createLinearGradient(0, H*0.6, 0, H);
+    gnd.addColorStop(0, isBoss?'#1a0804':'#226018'); gnd.addColorStop(0.4, isBoss?'#100402':'#164210'); gnd.addColorStop(1, isBoss?'#080200':'#0a1c06');
+    ctx.fillStyle = gnd; ctx.fillRect(0, H*0.6, W, H*0.4);
+
+    // 3D path perspective
+    ctx.fillStyle = isBoss ? '#201004' : '#503820';
+    ctx.beginPath(); ctx.moveTo(W*0.3, H*0.6); ctx.lineTo(W*0.7, H*0.6); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = isBoss ? '#281408' : '#604428';
+    ctx.beginPath(); ctx.moveTo(W*0.36, H*0.6); ctx.lineTo(W*0.64, H*0.6); ctx.lineTo(W*0.9, H); ctx.lineTo(W*0.1, H); ctx.closePath(); ctx.fill();
+    // Path lines
+    for (let i = 1; i < 5; i++) {
+      const fy = H * (0.6 + i * 0.1);
+      const fw = (i / 5) * W * 0.4;
+      ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fillRect(W*0.5-fw/2, fy, fw, 1.5);
+    }
+
+    // Tree corridor (left and right)
+    [[0.05,1.0],[0.14,0.82],[0.22,0.68],[0.28,0.56]].forEach(([tx, sc]) => {
+      this._drawFTree(tx*W, H*0.6, H*0.42*sc, isBoss?'#200604':'#0a2a04', isBoss?'#380a08':'#143a08', 'L');
+    });
+    [[0.95,1.0],[0.86,0.82],[0.78,0.68],[0.72,0.56]].forEach(([tx, sc]) => {
+      this._drawFTree(tx*W, H*0.6, H*0.42*sc, isBoss?'#200604':'#0a2a04', isBoss?'#380a08':'#143a08', 'R');
+    });
+
+    // Light at end of path
+    if (!isBoss) {
+      const vg = ctx.createRadialGradient(W*0.5, H*0.58, 0, W*0.5, H*0.58, 80);
+      vg.addColorStop(0, 'rgba(200,240,180,0.55)'); vg.addColorStop(0.5, 'rgba(100,200,80,0.2)'); vg.addColorStop(1, 'transparent');
+      ctx.fillStyle = vg; ctx.fillRect(W*0.2, H*0.35, W*0.6, H*0.3);
+    } else {
+      // Boss: red pulsing light
+      const ba = 0.5 + Math.sin(frame*0.08)*0.3;
+      const bg = ctx.createRadialGradient(W*0.5, H*0.52, 0, W*0.5, H*0.52, 50*ba);
+      bg.addColorStop(0, `rgba(255,40,0,${ba*0.7})`); bg.addColorStop(1, 'transparent');
+      ctx.fillStyle = bg; ctx.fillRect(W*0.2, H*0.3, W*0.6, H*0.4);
+    }
+
+    // Foreground grass fringe
+    ctx.fillStyle = isBoss ? '#1a0402' : '#1a5010';
+    ctx.beginPath(); ctx.moveTo(0, H*0.61);
+    for (let gx = 0; gx < W; gx += 8) {
+      ctx.lineTo(gx, H*0.61 - 3 - Math.sin(gx*0.09+frame*0.03)*2.5);
+      ctx.lineTo(gx+4, H*0.61+2);
+    }
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+  }
+
+  _drawFTree(cx, baseY, tH, dark, light, side) {
+    const ctx = this.ctx;
+    const tW = tH * 0.5;
+    ctx.fillStyle = '#4a2a0c';
+    ctx.fillRect(cx - tH*0.04, baseY - tH*0.2, tH*0.08, tH*0.2 + 3);
+    for (let l = 0; l < 3; l++) {
+      const ly = baseY - tH*(0.25 + l*0.3);
+      const lw = tW*(1.0 - l*0.15);
+      const lh = tH*0.36;
+      ctx.fillStyle = dark;
+      ctx.beginPath(); ctx.moveTo(cx,ly-lh); ctx.lineTo(cx+lw*0.5,ly+lh*0.1); ctx.lineTo(cx-lw*0.5,ly+lh*0.1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = light;
+      ctx.beginPath(); ctx.moveTo(cx-lw*0.5,ly-lh*0.1); ctx.lineTo(cx,ly-lh); ctx.lineTo(cx,ly+lh*0.1); ctx.lineTo(cx-lw*0.5,ly+lh*0.1); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // ── CAVE CORRIDOR ──────────────────────────────────────────
+  _drawCaveCorridor(isBoss) {
+    const { ctx, W, H, frame } = this;
+    // Background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#040306'); bg.addColorStop(0.5, '#080608'); bg.addColorStop(1, '#100c0a');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    // Stone wall blocks
+    ctx.fillStyle = '#120e10'; ctx.fillRect(0, 0, W, H*0.68);
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 9; col++) {
+        const bw = W/8, bh = H*0.068;
+        const bx = col*bw + (row%2===0?0:bw/2) - bw/2;
+        const by = row * bh;
+        const shade = ((row+col)%3===0) ? 0.05 : ((row+col)%3===1) ? 0.025 : 0.01;
+        ctx.fillStyle = `rgba(255,255,255,${shade})`; ctx.fillRect(bx+1.5, by+1.5, bw-3, bh-3);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, bw, 2); ctx.fillRect(bx, by, 2, bh);
+      }
+    }
+
+    // Arch perspective
+    const archW = isBoss ? W*0.28 : W*0.22;
+    const archH = isBoss ? H*0.6 : H*0.52;
+    const ax = W*0.5 - archW/2, ayt = H*0.04;
+    const innerG = ctx.createLinearGradient(W*0.5, ayt, W*0.5, ayt+archH);
+    innerG.addColorStop(0, isBoss?'#2a0020':'#060310'); innerG.addColorStop(1, isBoss?'#080010':'#0a0810');
+    ctx.fillStyle = innerG;
+    ctx.beginPath();
+    ctx.moveTo(ax, ayt+archH);
+    ctx.lineTo(ax, ayt + archW*0.5);
+    ctx.quadraticCurveTo(ax, ayt, W*0.5, ayt);
+    ctx.quadraticCurveTo(ax+archW, ayt, ax+archW, ayt + archW*0.5);
+    ctx.lineTo(ax+archW, ayt+archH);
+    ctx.closePath(); ctx.fill();
+
+    // Nested arches for 3D depth
+    for (let d = 1; d <= 4; d++) {
+      const dw = archW*(1-d*0.18), dh = archH*(1-d*0.15);
+      const dx = W*0.5 - dw/2, dyt = ayt + archH*d*0.11;
+      ctx.strokeStyle = `rgba(60,40,60,${0.55-d*0.08})`; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(dx, dyt+dh); ctx.lineTo(dx, dyt+dw*0.5);
+      ctx.quadraticCurveTo(dx, dyt, W*0.5, dyt);
+      ctx.quadraticCurveTo(dx+dw, dyt, dx+dw, dyt+dw*0.5);
+      ctx.lineTo(dx+dw, dyt+dh); ctx.stroke();
+    }
+
+    // Floor
+    const fl = ctx.createLinearGradient(0, H*0.68, 0, H);
+    fl.addColorStop(0, '#2c2018'); fl.addColorStop(0.5, '#1e1610'); fl.addColorStop(1, '#100c08');
+    ctx.fillStyle = fl; ctx.fillRect(0, H*0.68, W, H*0.32);
+    for (let ti = 0; ti < 5; ti++) {
+      ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(0, H*(0.68+ti*0.064), W, 1.5);
+      const tw = W*(0.1+ti*0.2);
+      ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fillRect(W*0.5-tw/2, H*(0.68+ti*0.064), tw, 1);
+    }
+
+    // Torches
+    this._drawCaveTorch(W*0.18, H*0.36, frame);
+    this._drawCaveTorch(W*0.82, H*0.36, frame + 11);
+
+    // Stalactites
+    [0.08,0.18,0.28,0.38,0.5,0.62,0.72,0.82,0.92].forEach((sx, i) => {
+      const slen = H*(0.08+((i*3)%5)*0.045);
+      const sw = 9 + (i%3)*5;
+      ctx.fillStyle = '#1a1210';
+      ctx.beginPath(); ctx.moveTo(sx*W-sw/2,0); ctx.lineTo(sx*W+sw/2,0); ctx.lineTo(sx*W,slen); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#242018'; ctx.fillRect(sx*W-1.5, 0, 3, slen*0.5);
+    });
+
+    // Crystal glow pools on walls
+    if (!isBoss) {
+      [[W*0.08,H*0.42,'#9040c8'],[W*0.88,H*0.38,'#4060d0']].forEach(([gx,gy,col]) => {
+        const ga = 0.12+Math.sin(frame*0.05)*0.04;
+        const r=parseInt(col.slice(1,3),16),gb=parseInt(col.slice(3,5),16),gbl=parseInt(col.slice(5,7),16);
+        const cr = ctx.createRadialGradient(gx,gy,5,gx,gy,80);
+        cr.addColorStop(0, `rgba(${r},${gb},${gbl},${ga*3})`);
+        cr.addColorStop(1, 'transparent');
+        ctx.fillStyle = cr; ctx.fillRect(gx-80, gy-80, 160, 160);
+      });
+    } else {
+      // Boss: pulsing red glow
+      const ba = 0.35+Math.sin(frame*0.09)*0.2;
+      const br = ctx.createRadialGradient(W*0.5, H*0.35, 0, W*0.5, H*0.35, 120*ba);
+      br.addColorStop(0, `rgba(200,0,50,${ba})`); br.addColorStop(1, 'transparent');
+      ctx.fillStyle = br; ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  _drawCaveTorch(x, y, frame) {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#503018'; ctx.fillRect(x-6,y,12,16);
+    ctx.fillStyle = '#3a2010'; ctx.fillRect(x-5,y+2,10,12);
+    const flicker = Math.sin(frame*0.24)*4;
+    const gw = ctx.createRadialGradient(x,y-10,2,x,y-10,42);
+    gw.addColorStop(0, `rgba(255,160,32,${0.3+Math.sin(frame*0.3)*0.08})`); gw.addColorStop(1,'transparent');
+    ctx.fillStyle = gw; ctx.beginPath(); ctx.arc(x,y-10,42,0,Math.PI*2); ctx.fill();
+    [[14+flicker,'#cc3800'],[11+flicker,'#f07800'],[6+flicker,'#ffd030']].forEach(([fh,c]) => {
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.moveTo(x,y-fh); ctx.lineTo(x+6,y-1); ctx.lineTo(x-6,y-1); ctx.closePath(); ctx.fill();
+    });
+  }
+
+  // ── CASTLE CORRIDOR ────────────────────────────────────────
+  _drawCastleCorridor(isBoss) {
+    const { ctx, W, H, frame } = this;
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#030010'); bg.addColorStop(0.5, '#060018'); bg.addColorStop(1, '#0c0020');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    // Energy clouds
+    for (let i = 0; i < 4; i++) {
+      const px = W*(0.15+i*0.24), py = H*0.3;
+      const phase = frame*0.016+i*1.9;
+      const ex = px+Math.cos(phase)*18, ey = py+Math.sin(phase)*9;
+      const eg = ctx.createRadialGradient(ex,ey,4,ex,ey,80);
+      eg.addColorStop(0, `rgba(100,0,180,${0.16+Math.sin(phase)*0.06})`);
+      eg.addColorStop(0.5, `rgba(50,0,90,0.07)`); eg.addColorStop(1, 'transparent');
+      ctx.fillStyle = eg; ctx.fillRect(0, 0, W, H*0.8);
+    }
+
+    // Stone wall
+    ctx.fillStyle = '#100c1a'; ctx.fillRect(0, 0, W, H*0.7);
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < 9; col++) {
+        const bw = W/8, bh = H*0.07;
+        const bx = col*bw + (row%2===0?0:bw/2) - bw/2;
+        const by = row * bh;
+        ctx.fillStyle = `rgba(255,255,255,${(row+col)%3===0?0.03:0.01})`; ctx.fillRect(bx+1.5, by+1.5, bw-3, bh-3);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, bw, 2); ctx.fillRect(bx, by, 2, bh);
+      }
+    }
+
+    // Pillars
+    [0.1, 0.9].forEach(px => {
+      const x = px*W, pw = 38;
+      const pg = ctx.createLinearGradient(x-pw/2,0,x+pw/2,0);
+      pg.addColorStop(0,'#10091a'); pg.addColorStop(0.3,'#1e1430'); pg.addColorStop(0.7,'#140c1e'); pg.addColorStop(1,'#09060e');
+      ctx.fillStyle = pg; ctx.fillRect(x-pw/2, 0, pw, H*0.8);
+      for (let sy = 0; sy < H*0.8; sy += 30) { ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x-pw/2,sy,pw,2); }
+      ctx.fillStyle='rgba(100,50,160,0.35)'; ctx.fillRect(x-pw/2, 0, 3, H*0.8);
+    });
+
+    // Arch
+    const archW = isBoss ? W*0.32 : W*0.26;
+    const ax = W*0.5 - archW/2, ayt = H*0.02;
+    const aH = H*0.66;
+    const innerG = ctx.createLinearGradient(W*0.5, ayt, W*0.5, ayt+aH);
+    innerG.addColorStop(0, isBoss?'#1a0028':'#060016'); innerG.addColorStop(1, isBoss?'#0c0020':'#04000e');
+    ctx.fillStyle = innerG;
+    ctx.beginPath();
+    ctx.moveTo(ax, ayt+aH); ctx.lineTo(ax, ayt+archW*0.5);
+    ctx.quadraticCurveTo(ax, ayt, W*0.5, ayt);
+    ctx.quadraticCurveTo(ax+archW, ayt, ax+archW, ayt+archW*0.5);
+    ctx.lineTo(ax+archW, ayt+aH); ctx.closePath(); ctx.fill();
+
+    // Nested arches
+    for (let d = 1; d <= 4; d++) {
+      const dw = archW*(1-d*0.18), dh = aH*(1-d*0.15);
+      const dx = W*0.5 - dw/2, dyt = ayt + aH*d*0.10;
+      ctx.strokeStyle = `rgba(80,30,120,${0.6-d*0.1})`; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(dx, dyt+dh); ctx.lineTo(dx, dyt+dw*0.5);
+      ctx.quadraticCurveTo(dx, dyt, W*0.5, dyt);
+      ctx.quadraticCurveTo(dx+dw, dyt, dx+dw, dyt+dw*0.5);
+      ctx.lineTo(dx+dw, dyt+dh); ctx.stroke();
+    }
+
+    // Floor with perspective tiles
+    const fl = ctx.createLinearGradient(0, H*0.7, 0, H);
+    fl.addColorStop(0,'#1a1030'); fl.addColorStop(1,'#0a0818');
+    ctx.fillStyle = fl; ctx.fillRect(0, H*0.7, W, H*0.3);
+    ctx.strokeStyle='rgba(80,40,120,0.38)'; ctx.lineWidth=1;
+    for (let fy = 0; fy < 5; fy++) { ctx.beginPath(); ctx.moveTo(0, H*(0.7+fy*0.06)); ctx.lineTo(W, H*(0.7+fy*0.06)); ctx.stroke(); }
+    for (let fv = 0; fv <= 10; fv++) { ctx.beginPath(); ctx.moveTo(W/2, H*0.7); ctx.lineTo(fv*W/10, H); ctx.stroke(); }
+
+    // Purple torches
+    [W*0.2, W*0.8].forEach((tx, i) => {
+      const ty = H*0.38;
+      const flicker = Math.sin(frame*0.2 + i*3)*3;
+      const gw = ctx.createRadialGradient(tx,ty-8,2,tx,ty-8,40);
+      gw.addColorStop(0,`rgba(160,0,255,${0.28+Math.sin(frame*0.26+i)*0.08})`); gw.addColorStop(1,'transparent');
+      ctx.fillStyle=gw; ctx.beginPath(); ctx.arc(tx,ty-8,40,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#402050'; ctx.fillRect(tx-5,ty,10,14);
+      [[12+flicker,'#8800cc'],[9+flicker,'#cc20ff'],[5+flicker,'#e890ff']].forEach(([fh,c])=>{
+        ctx.fillStyle=c;
+        ctx.beginPath(); ctx.moveTo(tx,ty-fh); ctx.lineTo(tx+5,ty-1); ctx.lineTo(tx-5,ty-1); ctx.closePath(); ctx.fill();
+      });
+    });
+
+    // Boss: vortex
+    if (isBoss) {
+      const cX=W*0.5, cY=H*0.38;
+      const pulse = 0.85+Math.sin(frame*0.07)*0.15;
+      const core = ctx.createRadialGradient(cX,cY,0,cX,cY,55*pulse);
+      core.addColorStop(0,'rgba(220,100,255,0.7)'); core.addColorStop(0.4,'rgba(120,0,200,0.4)');
+      core.addColorStop(0.7,'rgba(60,0,100,0.2)'); core.addColorStop(1,'transparent');
+      ctx.fillStyle=core; ctx.fillRect(cX-80,cY-80,160,160);
+      for (let r=1;r<=4;r++) {
+        ctx.strokeStyle=`rgba(200,80,255,${0.5-r*0.09})`; ctx.lineWidth=1.8;
+        ctx.beginPath(); ctx.arc(cX,cY,r*14*pulse,0,Math.PI*2); ctx.stroke();
+      }
+    } else {
+      // Flying particles
+      for (let p=0;p<14;p++) {
+        const px=((W*(p*0.07+0.02)+frame*(0.3+p*0.015))%W);
+        const py=H*0.1+Math.sin(frame*0.04+p*0.8)*H*0.26;
+        ctx.fillStyle=`rgba(160,80,255,${0.3+Math.sin(frame*0.1+p)*0.14})`;
+        ctx.beginPath(); ctx.arc(px,py,1.8,0,Math.PI*2); ctx.fill();
+      }
+    }
+  }
+}
+
+let dungeonRenderer = null;
 
 class Game {
   constructor() {
@@ -730,15 +1260,28 @@ class Game {
   // ── Screens ───────────────────────────────────────────────
   render() {
     const c = $('game-container');
-    // Stop canvas if leaving battle
+    // Stop renderers when leaving their screens
     if (this.screen !== 'BATTLE' && battleRenderer) {
       battleRenderer.stop(); battleRenderer = null;
+    }
+    if (this.screen !== 'DUNGEON' && dungeonRenderer) {
+      dungeonRenderer.stop(); dungeonRenderer = null;
     }
     switch (this.screen) {
       case 'TITLE':   c.innerHTML = this.renderTitle();  break;
       case 'MAP':     c.innerHTML = this.renderMap();    break;
       case 'TOWN':    c.innerHTML = this.renderTown();   break;
-      case 'DUNGEON': c.innerHTML = this.renderDungeon(); break;
+      case 'DUNGEON':
+        c.innerHTML = this.renderDungeon();
+        requestAnimationFrame(() => {
+          const scene = document.getElementById('dungeon-canvas-target');
+          if (scene) {
+            dungeonRenderer = new DungeonRenderer();
+            dungeonRenderer.mount(scene);
+            dungeonRenderer.start();
+          }
+        });
+        break;
       case 'BATTLE':
         c.innerHTML = this.renderBattle();
         // Mount canvas battle renderer
@@ -763,24 +1306,61 @@ class Game {
 
   // ── TITLE ─────────────────────────────────────────────────
   renderTitle() {
-    const stars = Array.from({length: 60}, () => {
+    const stars = Array.from({length: 80}, () => {
       const x = rand(0, 100), y = rand(0, 100), s = rand(1, 3);
-      const delay = (Math.random() * 2).toFixed(1);
+      const delay = (Math.random() * 3).toFixed(1);
       return `<div class="star" style="left:${x}%;top:${y}%;width:${s}px;height:${s}px;animation-delay:${delay}s"></div>`;
     }).join('');
+    // Start title canvas animation after render
+    requestAnimationFrame(() => this._startTitleCanvas());
     return `
     <div id="title-screen">
       <div class="stars">${stars}</div>
-      <div class="title-logo">
+      <div class="title-logo" style="z-index:2;position:relative">
         <span class="title-main">光のクリスタル</span>
         <span class="title-sub">～ The Crystal of Light ～</span>
       </div>
-      <div class="title-hero">⚔️</div>
+      <canvas id="title-canvas" width="640" height="200"
+        style="position:absolute;top:50px;left:0;width:100%;height:200px;z-index:1;pointer-events:none;image-rendering:pixelated"></canvas>
       <button class="press-start" onclick="game.startGame()">▶ ゲームスタート</button>
       <div class="title-version text-gray text-small" style="position:absolute;bottom:12px">
-        RPG ～30分クリア～ Web Audio DQ風 BGM付き
+        RPG ～30分クリア～ Web Audio BGM付き
       </div>
     </div>`;
+  }
+
+  _startTitleCanvas() {
+    const cvs = document.getElementById('title-canvas');
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    const W = 640, H = 200;
+    let frame = 0;
+    const tick = () => {
+      if (!document.getElementById('title-canvas')) return; // stop if navigated away
+      frame++;
+      ctx.clearRect(0, 0, W, H);
+      // Draw four party members on the title screen
+      const br = new BattleRenderer();
+      br.frame = frame; br.canvas = cvs; br.ctx = ctx; br.W = W; br.H = H;
+      // Hero
+      ctx.save(); ctx.translate(W*0.25, H*0.92 + Math.sin(frame*0.04)*4); br._c_hero(ctx, 3.2); ctx.restore();
+      // Erina
+      ctx.save(); ctx.translate(W*0.42, H*0.88 + Math.sin(frame*0.04+1)*4); br._c_erina(ctx, 2.8); ctx.restore();
+      // Gard
+      ctx.save(); ctx.translate(W*0.60, H*0.92 + Math.sin(frame*0.04+2)*4); br._c_gard(ctx, 3.4); ctx.restore();
+      // Luna
+      ctx.save(); ctx.translate(W*0.77, H*0.88 + Math.sin(frame*0.04+3)*4); br._c_luna(ctx, 2.6); ctx.restore();
+      // Sparkle particles
+      for (let i = 0; i < 8; i++) {
+        const px = W*(0.12 + (i*0.11 + frame*0.003*(i%3+1)) % 0.9);
+        const py = H*(0.1 + Math.sin(frame*0.03+i*0.7)*0.35 + 0.2);
+        const pa = 0.5 + Math.sin(frame*0.12+i)*0.3;
+        ctx.fillStyle = `rgba(240,200,80,${pa})`;
+        ctx.beginPath(); ctx.arc(px, py, 2.5, 0, Math.PI*2); ctx.fill();
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
   }
 
   startGame() {
@@ -1133,22 +1713,13 @@ class Game {
 
     return `<div id="dungeon-screen">
       <div class="dungeon-bg">
-        <div class="dungeon-scene ${areaClass}">
-          <div class="dungeon-walls">
-            <div class="dungeon-wall-left ${areaClass}"></div>
-            <div class="dungeon-wall-right ${areaClass}"></div>
-            <div class="dungeon-ceiling"></div>
-            <div class="dungeon-floor"></div>
+        <div class="dungeon-scene ${areaClass}" id="dungeon-canvas-target">
+          <!-- Canvas background rendered here (z-index:1) -->
+          <div class="dungeon-room-info" style="z-index:10;position:relative">${area.name}　[${this.room + 1} / ${area.rooms + 1}]</div>
+          <div class="dungeon-center" style="z-index:10;position:relative">
+            ${bossReady ? `<div style="font-size:11px;color:#ff6666;letter-spacing:2px;text-shadow:0 0 12px #ff0000">--- ボスが待ち受けている ---</div>` : ''}
+            ${this.lastTreasure ? `<div class="treasure-found" style="z-index:10">${this.lastTreasure}</div>` : ''}
           </div>
-          ${torches}
-          <div class="dungeon-room-info">${area.name}　[${this.room + 1} / ${area.rooms + 1}]</div>
-          <div class="dungeon-center">
-            <span class="dungeon-illustration-emoji" style="font-size:${bossReady ? '88' : '58'}px">${sceneEmoji}</span>
-            <div style="font-size:11px;color:${bossReady ? '#ff6666' : '#666'};margin-top:4px">
-              ${bossReady ? '--- ボスが待ち受けている ---' : area.name}
-            </div>
-          </div>
-          ${this.lastTreasure ? `<div class="treasure-found">${this.lastTreasure}</div>` : ''}
         </div>
         <div class="dungeon-actions">
           <div class="dungeon-menu">
@@ -1528,6 +2099,22 @@ class Game {
       return;
     }
     this.player.mp -= sp.mpCost;
+
+    // Trigger visual spell effect on canvas
+    if (battleRenderer) {
+      const fxMap = {
+        fire:'fire', blaze:'fire', inferno:'fire', flame:'fire',
+        blizzard:'ice', frost:'ice', glacier:'ice', ice:'ice',
+        thunder:'thunder', spark:'thunder', bolt:'thunder', lightning:'thunder',
+        dark:'dark', shadow:'dark', void:'dark', death:'dark',
+        holy:'holy', light:'holy', dawn:'holy', angel:'holy',
+        heal:'heal', cure:'heal',
+        healall:'healall', revive:'heal',
+      };
+      const fxType = fxMap[id] || (sp.type === 'heal' || sp.type === 'healall' || sp.type === 'revive' ? 'heal' : 'fire');
+      battleRenderer.triggerSpell(fxType);
+    }
+
     if (sp.type === 'magic') {
       const dmg = rand(sp.damage[0], sp.damage[1]);
       this.battle.monster.hp -= dmg;
