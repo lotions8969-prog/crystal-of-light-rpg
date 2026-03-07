@@ -527,3 +527,163 @@ SPRITES.demonKing = `<svg viewBox="0 0 280 320" xmlns="http://www.w3.org/2000/sv
   <ellipse cx="140" cy="286" rx="96" ry="14" fill="#1e0030" opacity="0.48"/>
   <ellipse cx="140" cy="286" rx="72" ry="9" fill="#5500aa" opacity="0.28" filter="url(#glow2)"/>
 </svg>`;
+
+// ── Party Member Sprites (used as portraits / battle reference) ──────────────
+
+SPRITES.erina = `<svg viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg" width="72" height="96">
+  <defs>
+    <radialGradient id="eg" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#ffeac8"/>
+      <stop offset="70%" stop-color="#e8aa78"/>
+      <stop offset="100%" stop-color="#c87848"/>
+    </radialGradient>
+    <radialGradient id="ehg" cx="42%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#8844ff"/>
+      <stop offset="60%" stop-color="#5522cc"/>
+      <stop offset="100%" stop-color="#2200aa"/>
+    </radialGradient>
+  </defs>
+  <!-- Robe body -->
+  <path d="M28,88 Q20,115 18,150 L102,150 Q100,115 92,88 Z" fill="#4422cc" stroke="#3311aa" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M28,88 Q20,115 18,150 L102,150 Q100,115 92,88 Z" fill="none" stroke="#8866ff" stroke-width="1" opacity="0.5"/>
+  <!-- Robe trim -->
+  <path d="M40,88 L60,100 L80,88" stroke="#aa88ff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Arms -->
+  <path d="M28,88 Q8,105 12,128" stroke="#3311aa" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <path d="M92,88 Q112,105 108,128" stroke="#3311aa" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <!-- Staff -->
+  <line x1="108" y1="50" x2="112" y2="150" stroke="#8a5a20" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="108" cy="50" r="10" fill="#8844ff" stroke="#6622cc" stroke-width="2"/>
+  <circle cx="108" cy="50" r="5" fill="rgba(200,160,255,0.9)"/>
+  <!-- Neck -->
+  <rect x="52" y="68" width="16" height="12" rx="4" fill="url(#eg)" stroke="#c87848" stroke-width="1.5"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="50" rx="28" ry="30" fill="url(#eg)" stroke="#c87848" stroke-width="2.5"/>
+  <!-- Hair highlight -->
+  <ellipse cx="60" cy="28" rx="22" ry="12" fill="rgba(200,150,255,0.35)"/>
+  <!-- Witch hat -->
+  <path d="M30,44 Q60,48 90,44 Q80,24 60,12 Q40,24 30,44 Z" fill="url(#ehg)" stroke="#2200aa" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M44,30 Q60,20 76,30" stroke="#aa88ff" stroke-width="1.5" fill="none" opacity="0.6"/>
+  <ellipse cx="60" cy="44" rx="32" ry="7" fill="#5522cc" stroke="#2200aa" stroke-width="2"/>
+  <!-- Eyes -->
+  <ellipse cx="48" cy="55" rx="6" ry="7" fill="white" stroke="#c87848" stroke-width="1.5"/>
+  <ellipse cx="72" cy="55" rx="6" ry="7" fill="white" stroke="#c87848" stroke-width="1.5"/>
+  <circle cx="49" cy="56" r="4" fill="#5522cc"/>
+  <circle cx="73" cy="56" r="4" fill="#5522cc"/>
+  <circle cx="51" cy="54" r="1.5" fill="white"/>
+  <circle cx="75" cy="54" r="1.5" fill="white"/>
+  <!-- Mouth -->
+  <path d="M52,66 Q60,72 68,66" stroke="#c87848" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Shadow -->
+  <ellipse cx="60" cy="154" rx="40" ry="7" fill="#2200aa" opacity="0.22"/>
+</svg>`;
+
+SPRITES.gard = `<svg viewBox="0 0 140 180" xmlns="http://www.w3.org/2000/svg" width="84" height="108">
+  <defs>
+    <radialGradient id="gag" cx="38%" cy="32%" r="62%">
+      <stop offset="0%" stop-color="#e8b888"/>
+      <stop offset="65%" stop-color="#c88850"/>
+      <stop offset="100%" stop-color="#a06030"/>
+    </radialGradient>
+    <radialGradient id="garm" cx="40%" cy="35%" r="62%">
+      <stop offset="0%" stop-color="#a8b8cc"/>
+      <stop offset="60%" stop-color="#607890"/>
+      <stop offset="100%" stop-color="#364858"/>
+    </radialGradient>
+  </defs>
+  <!-- Legs/boots -->
+  <rect x="42" y="128" width="24" height="42" rx="4" fill="#364858" stroke="#203040" stroke-width="2.5"/>
+  <rect x="74" y="128" width="24" height="42" rx="4" fill="#364858" stroke="#203040" stroke-width="2.5"/>
+  <!-- Body armor -->
+  <path d="M32,78 Q26,110 28,165 L112,165 Q114,110 108,78 Z" fill="url(#garm)" stroke="#364858" stroke-width="3"/>
+  <path d="M32,78 Q26,110 28,165 L112,165 Q114,110 108,78 Z" fill="none" stroke="#c8d8e8" stroke-width="1" opacity="0.3"/>
+  <!-- Shoulder guards -->
+  <ellipse cx="30" cy="82" rx="18" ry="12" fill="#607890" stroke="#364858" stroke-width="2.5" transform="rotate(-20,30,82)"/>
+  <ellipse cx="110" cy="82" rx="18" ry="12" fill="#607890" stroke="#364858" stroke-width="2.5" transform="rotate(20,110,82)"/>
+  <!-- Arms -->
+  <path d="M32,82 Q10,108 14,138" stroke="#607890" stroke-width="20" fill="none" stroke-linecap="round"/>
+  <path d="M108,82 Q130,108 126,138" stroke="#607890" stroke-width="20" fill="none" stroke-linecap="round"/>
+  <!-- Fist -->
+  <circle cx="14" cy="140" r="12" fill="#607890" stroke="#364858" stroke-width="2.5"/>
+  <!-- Sword -->
+  <rect x="124" y="30" width="8" height="90" rx="2" fill="linear-gradient(180deg,#e8e8f0,#9898b8)" stroke="#6666aa" stroke-width="1.5"/>
+  <rect x="124" y="30" width="8" height="90" rx="2" fill="#c8c8e0" stroke="#6666aa" stroke-width="1.5"/>
+  <line x1="124" y1="30" x2="132" y2="30" stroke="#aaaacc" stroke-width="1" opacity="0.8"/>
+  <rect x="116" y="80" width="24" height="7" rx="2" fill="#c8a030" stroke="#886010" stroke-width="1.5"/>
+  <path d="M128,30 L124,14 L128,8 L132,14 Z" fill="#d8d8f0" stroke="#6666aa" stroke-width="1.5"/>
+  <!-- Neck -->
+  <rect x="58" y="62" width="24" height="14" rx="5" fill="url(#gag)" stroke="#a06030" stroke-width="1.5"/>
+  <!-- Head -->
+  <ellipse cx="70" cy="44" rx="32" ry="36" fill="url(#gag)" stroke="#a06030" stroke-width="2.5"/>
+  <!-- Beard shadow -->
+  <path d="M46,58 Q70,74 94,58" fill="#8a5030" stroke="#6a3010" stroke-width="1.5" opacity="0.6"/>
+  <!-- Helmet -->
+  <path d="M36,40 Q40,10 70,8 Q100,10 104,40 Q90,28 70,26 Q50,28 36,40 Z" fill="#607890" stroke="#364858" stroke-width="2.5"/>
+  <path d="M36,40 Q40,18 70,16 Q100,18 104,40" stroke="#c8d8e8" stroke-width="1.2" fill="none" opacity="0.5"/>
+  <!-- Eyes -->
+  <ellipse cx="55" cy="50" rx="8" ry="7" fill="white" stroke="#a06030" stroke-width="1.5"/>
+  <ellipse cx="85" cy="50" rx="8" ry="7" fill="white" stroke="#a06030" stroke-width="1.5"/>
+  <circle cx="57" cy="51" r="5" fill="#2a3a5a"/>
+  <circle cx="87" cy="51" r="5" fill="#2a3a5a"/>
+  <circle cx="59" cy="49" r="2" fill="white"/>
+  <circle cx="89" cy="49" r="2" fill="white"/>
+  <!-- Stern mouth -->
+  <path d="M58,62 Q70,65 82,62" stroke="#a06030" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Scar -->
+  <path d="M84,44 L90,56" stroke="#c87848" stroke-width="1.8" opacity="0.7" stroke-linecap="round"/>
+  <!-- Shadow -->
+  <ellipse cx="70" cy="168" rx="44" ry="8" fill="#203040" opacity="0.25"/>
+</svg>`;
+
+SPRITES.luna = `<svg viewBox="0 0 120 165" xmlns="http://www.w3.org/2000/svg" width="72" height="99">
+  <defs>
+    <radialGradient id="lg" cx="40%" cy="33%" r="60%">
+      <stop offset="0%" stop-color="#fff8e8"/>
+      <stop offset="65%" stop-color="#f0d898"/>
+      <stop offset="100%" stop-color="#d8b060"/>
+    </radialGradient>
+    <radialGradient id="lrobe" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#f0e8d0"/>
+      <stop offset="55%" stop-color="#d8c898"/>
+      <stop offset="100%" stop-color="#b8a870"/>
+    </radialGradient>
+  </defs>
+  <!-- Robe -->
+  <path d="M25,88 Q16,118 14,155 L106,155 Q104,118 95,88 Z" fill="url(#lrobe)" stroke="#b8a060" stroke-width="2.5"/>
+  <!-- Robe detail -->
+  <path d="M25,88 Q40,102 60,104 Q80,102 95,88" stroke="#d0b870" stroke-width="1.5" fill="none" opacity="0.8"/>
+  <path d="M22,108 Q40,120 60,122 Q80,120 98,108" stroke="#d0b870" stroke-width="1" fill="none" opacity="0.5"/>
+  <path d="M20,128 Q40,138 60,140 Q80,138 100,128" stroke="#d0b870" stroke-width="1" fill="none" opacity="0.4"/>
+  <!-- Holy symbol on chest -->
+  <circle cx="60" cy="96" r="9" fill="rgba(255,240,160,0.3)" stroke="#e8c840" stroke-width="1.5"/>
+  <line x1="60" y1="88" x2="60" y2="104" stroke="#ffd700" stroke-width="2" stroke-linecap="round"/>
+  <line x1="53" y1="95" x2="67" y2="95" stroke="#ffd700" stroke-width="2" stroke-linecap="round"/>
+  <!-- Staff/wand -->
+  <line x1="16" y1="55" x2="12" y2="155" stroke="#c8a840" stroke-width="4" stroke-linecap="round"/>
+  <!-- Moon atop staff -->
+  <path d="M16,55 Q8,45 12,35 Q22,42 20,55 Z" fill="#ffd700" stroke="#b89020" stroke-width="2"/>
+  <circle cx="14" cy="45" r="4" fill="rgba(255,240,160,0.8)"/>
+  <!-- Arms -->
+  <path d="M25,88 Q6,108 10,135" stroke="#c8a870" stroke-width="13" fill="none" stroke-linecap="round"/>
+  <path d="M95,88 Q114,108 110,135" stroke="#c8a870" stroke-width="13" fill="none" stroke-linecap="round"/>
+  <!-- Neck -->
+  <rect x="52" y="68" width="16" height="14" rx="5" fill="url(#lg)" stroke="#d8b060" stroke-width="1.5"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="48" rx="28" ry="30" fill="url(#lg)" stroke="#d8b060" stroke-width="2.5"/>
+  <!-- Veil/hood fringe -->
+  <path d="M30,36 Q60,30 90,36 Q88,18 60,14 Q32,18 30,36 Z" fill="#e8ddb0" stroke="#c8a840" stroke-width="2"/>
+  <path d="M30,36 Q60,34 90,36" stroke="#ffd700" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <!-- Eyes (gentle/serene) -->
+  <ellipse cx="47" cy="53" rx="7" ry="7.5" fill="white" stroke="#d8b060" stroke-width="1.5"/>
+  <ellipse cx="73" cy="53" rx="7" ry="7.5" fill="white" stroke="#d8b060" stroke-width="1.5"/>
+  <circle cx="48" cy="54" r="4.5" fill="#4a7a40"/>
+  <circle cx="74" cy="54" r="4.5" fill="#4a7a40"/>
+  <circle cx="50" cy="52" r="1.8" fill="white"/>
+  <circle cx="76" cy="52" r="1.8" fill="white"/>
+  <!-- Gentle smile -->
+  <path d="M50,64 Q60,70 70,64" stroke="#d8b060" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Halo glow -->
+  <circle cx="60" cy="14" r="12" fill="none" stroke="rgba(255,215,0,0.4)" stroke-width="2.5"/>
+  <!-- Shadow -->
+  <ellipse cx="60" cy="158" rx="40" ry="7" fill="#b8a060" opacity="0.2"/>
+</svg>`;

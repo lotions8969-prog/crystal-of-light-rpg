@@ -13,6 +13,8 @@ class Game {
   constructor() {
     this.screen = 'TITLE';
     this.player = null;
+    this.party = [];         // party member IDs (e.g. ['erina','gard','luna'])
+    this.partyData = {};     // live HP/MP state, deep-copied from GAME_DATA.partyMembers
     this.areaId = 'village';
     this.room = 0;
     this.areas = JSON.parse(JSON.stringify(GAME_DATA.areas));
@@ -37,10 +39,22 @@ class Game {
       items: [{ id: 'potion', count: 3 }],
       weapon: null, armor: null,
       spells: ['fire', 'heal'],
-      status: [],   // [{type:'poison', turns:N}]
+      status: [],
       tempDef: 0,
       buffTurns: 0,
     };
+  }
+
+  initParty() {
+    this.partyData = {};
+    Object.entries(GAME_DATA.partyMembers).forEach(([id, m]) => {
+      this.partyData[id] = {
+        ...m,
+        hp: m.maxHp, mp: m.maxMp,
+        status: [], alive: true,
+        tempDef: 0, buffTurns: 0,
+      };
+    });
   }
 
   getATK() {
@@ -145,8 +159,12 @@ class Game {
     musicEngine.init();
     musicEngine.resume();
     this.initPlayer();
+    this.initParty();
+    this.party = [];
     this.screen = 'DIALOG';
     this.showDialog(GAME_DATA.story.intro, () => {
+      // Erina joins after intro
+      if (!this.party.includes('erina')) this.party.push('erina');
       this.screen = 'TOWN';
       musicEngine.playTown();
       this.render();
@@ -429,6 +447,21 @@ class Game {
         <div style="font-size:11px;color:#e0e0ff;line-height:2">${spellList}</div>
         <div class="status-section-title">アイテム</div>
         <div style="font-size:11px;color:#e0e0ff;line-height:2">${itemList}</div>
+        ${this.party.length ? `
+        <div class="status-section-title">仲間</div>
+        ${this.party.map(id => {
+          const pm = this.partyData[id];
+          if (!pm) return '';
+          const pct = clamp(pm.hp / pm.maxHp * 100, 0, 100);
+          return `<div style="font-size:10px;margin-bottom:5px">
+            <div style="color:${pm.alive?'#c8e0ff':'#666'};margin-bottom:2px">${pm.name}（${pm.role}）${pm.alive?'':'<span style="color:#ff4444"> ×</span>'}</div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="color:#a0c4ff;font-size:9px">HP</span>
+              <div class="hp-bar-container" style="width:100px"><div class="${pct<25?'hp-bar low':pct<50?'hp-bar mid':'hp-bar'}" style="width:${pct}%"></div></div>
+              <span style="color:#fff;font-size:9px">${pm.hp}/${pm.maxHp}</span>
+            </div>
+          </div>`;
+        }).join('')}` : ''}
       </div>
     </div>`;
   }
@@ -663,6 +696,22 @@ class Game {
     const hpBlocks = this._makeBlocks(p.hp, p.maxHp, 18, pHpPct < 25 ? '#ff4444' : pHpPct < 50 ? '#ffcc00' : '#44ee44');
     const mpBlocks = this._makeBlocks(p.mp, p.maxMp, 18, '#4488ff');
 
+    // Party HP rows
+    let partyHpHtml = '';
+    this.party.forEach(id => {
+      const pm = this.partyData[id];
+      if (!pm) return;
+      const pct = clamp(pm.hp / pm.maxHp * 100, 0, 100);
+      const barCls = !pm.alive ? 'hp-bar low' : pct < 25 ? 'hp-bar low' : pct < 50 ? 'hp-bar mid' : 'hp-bar';
+      const nameColor = !pm.alive ? '#666' : '#c8e0ff';
+      partyHpHtml += `
+        <div class="party-member-row">
+          <span class="party-member-name" style="color:${nameColor}">${pm.name}</span>
+          <div class="hp-bar-container" style="width:80px;flex:1"><div class="${barCls}" style="width:${pct}%"></div></div>
+          <span class="party-member-hp">${pm.alive ? pm.hp : '---'}</span>
+        </div>`;
+    });
+
     const cmdHtml = this.subMenu ? this.renderSubMenu() : `
       <button class="dq-cmd" onclick="game.cmdAttack()"><span class="cmd-cursor">▶</span>たたかう</button>
       <button class="dq-cmd" onclick="game.cmdMagic()"><span class="cmd-cursor"> </span>じゅもん</button>
@@ -726,6 +775,7 @@ class Game {
             </div>
             <div class="dst-blocks">${mpBlocks}</div>
             ${p.status.length ? `<div style="margin-top:4px"><span class="poison-badge">どく</span></div>` : ''}
+            ${partyHpHtml ? `<div class="party-hp-section">${partyHpHtml}</div>` : ''}
           </div>
 
           <!-- Command window -->
@@ -821,6 +871,32 @@ class Game {
       this.player.tempDef += sp.buffAmount;
       this.player.buffTurns = sp.buffTurns;
       this.addBattleLog(`${this.player.name} は ${sp.name} を唱えた！ 守備力が上がった！`);
+    } else if (sp.type === 'healall') {
+      const h = rand(sp.heal[0], sp.heal[1]);
+      const heroActual = Math.min(h, this.player.maxHp - this.player.hp);
+      this.player.hp += heroActual;
+      musicEngine.sfx('heal');
+      this.party.forEach(id => {
+        const pm = this.partyData[id];
+        if (pm && pm.alive) {
+          const a = Math.min(h, pm.maxHp - pm.hp);
+          pm.hp += a;
+        }
+      });
+      this.addBattleLog(`${this.player.name} は ${sp.name} を唱えた！ 全員のHPが回復した！`);
+    } else if (sp.type === 'revive') {
+      const deadId = this.party.find(id => this.partyData[id] && !this.partyData[id].alive);
+      if (deadId) {
+        const pm = this.partyData[deadId];
+        pm.alive = true;
+        pm.hp = Math.floor(pm.maxHp * 0.5);
+        musicEngine.sfx('heal');
+        this.addBattleLog(`${this.player.name} は ${sp.name} を唱えた！ ${pm.name} が復活した！`);
+      } else {
+        this.player.mp += sp.mpCost;
+        this.addBattleLog('復活できる仲間がいない！MPを返した。');
+        this.render(); return;
+      }
     }
     this.monsterTurn();
   }
@@ -881,7 +957,71 @@ class Game {
     }
   }
 
+  // ── PARTY AUTO-BATTLE ─────────────────────────────────────
+  partyAutoTurn() {
+    const m = this.battle.monster;
+    const p = this.player;
+    if (m.hp <= 0) return;
+
+    this.party.forEach(id => {
+      if (m.hp <= 0) return;
+      const pm = this.partyData[id];
+      if (!pm || !pm.alive || pm.hp <= 0) return;
+
+      if (id === 'erina') {
+        // Cast offensive spell if MP available
+        const candidates = pm.spells.filter(s => {
+          const sp = GAME_DATA.spells[s];
+          return sp && sp.type === 'magic' && pm.mp >= sp.mpCost;
+        });
+        if (candidates.length > 0) {
+          const spellId = candidates[rand(0, candidates.length - 1)];
+          const sp = GAME_DATA.spells[spellId];
+          pm.mp -= sp.mpCost;
+          const dmg = rand(sp.damage[0], sp.damage[1]);
+          m.hp = Math.max(0, m.hp - dmg);
+          this.addBattleLog(`${pm.name} の${sp.name}！ ${m.name} に${dmg}のダメージ！`);
+          this.showDmgNum(dmg, 'enemy');
+        } else {
+          const dmg = Math.max(1, pm.atk - m.def + rand(-2, 2));
+          m.hp = Math.max(0, m.hp - dmg);
+          this.addBattleLog(`${pm.name} の攻撃！ ${dmg}のダメージ！`);
+        }
+      } else if (id === 'gard') {
+        // Always physical attack
+        const dmg = Math.max(1, pm.atk - m.def + rand(-3, 6));
+        m.hp = Math.max(0, m.hp - dmg);
+        this.addBattleLog(`${pm.name} の大剣攻撃！ ${dmg}のダメージ！`);
+        this.showDmgNum(dmg, 'enemy');
+      } else if (id === 'luna') {
+        // Heal hero if HP < 50%, otherwise attack
+        if (p.hp < p.maxHp * 0.5 && pm.mp >= 5) {
+          const healId = pm.spells.includes('healmore') && pm.mp >= 11 ? 'healmore' : 'heal';
+          const sp = GAME_DATA.spells[healId];
+          pm.mp -= sp.mpCost;
+          const h = rand(sp.heal[0], sp.heal[1]);
+          const actual = Math.min(h, p.maxHp - p.hp);
+          p.hp += actual;
+          musicEngine.sfx('heal');
+          this.addBattleLog(`${pm.name} の${sp.name}！ ${p.name}のHPが${actual}回復！`);
+        } else {
+          const dmg = Math.max(1, pm.atk - m.def + rand(-2, 2));
+          m.hp = Math.max(0, m.hp - dmg);
+          this.addBattleLog(`${pm.name} の攻撃！ ${dmg}のダメージ！`);
+        }
+      }
+    });
+  }
+
   monsterTurn() {
+    // Party acts before monster
+    this.partyAutoTurn();
+    if (this.battle.monster.hp <= 0) {
+      this.battle.monster.hp = 0;
+      this.winBattle();
+      return;
+    }
+
     const m = this.battle.monster;
     const p = this.player;
     const actions = m.actions;
@@ -1051,6 +1191,7 @@ class Game {
       this.flags.forestCleared = true;
       this.areas['cave'].locked = false;
       this.showDialog(GAME_DATA.story.forestClear, () => {
+        if (!this.party.includes('gard')) this.party.push('gard');
         this.screen = 'MAP';
         this.render();
       });
@@ -1058,12 +1199,12 @@ class Game {
       this.flags.caveCleared = true;
       this.areas['castle'].locked = false;
       this.showDialog(GAME_DATA.story.caveClear, () => {
+        if (!this.party.includes('luna')) this.party.push('luna');
         this.screen = 'MAP';
         this.render();
       });
     } else if (this.areaId === 'castle') {
       this.flags.gameCleared = true;
-      this.screen = 'DIALOG';
       this.showDialog(GAME_DATA.story.ending, () => {
         this.screen = 'ENDING';
         musicEngine.playEnding();
@@ -1146,19 +1287,19 @@ class Game {
 
   // ── ENDING ────────────────────────────────────────────────
   renderEnding() {
+    const partyNames = this.party.map(id => this.partyData[id]?.name || id).join('・');
     return `<div id="ending-screen">
-      <div class="ending-title">✨ おめでとう！ ✨</div>
+      <div class="ending-title">― 光のクリスタル ―</div>
       <div class="ending-text">
         魔王ゾルディアークを倒し、<br>
         光のクリスタルを取り戻した！<br><br>
-        勇者の名は世界中に広まり、<br>
-        平和が訪れた。<br><br>
+        ${partyNames ? `仲間たち（${partyNames}）と共に<br>戦い抜いた勇者の物語は<br>永く語り継がれた。<br><br>` : ''}
         ＊　＊　＊<br><br>
         クリアレベル: ${this.player.level}<br>
         所持金: ${this.player.gold} G<br><br>
         ～ THE END ～
       </div>
-      <button class="btn btn-gold" onclick="location.reload()" style="margin-top:24px">🔄 タイトルへ戻る</button>
+      <button class="btn btn-gold" onclick="location.reload()" style="margin-top:24px">タイトルへ戻る</button>
     </div>`;
   }
 
