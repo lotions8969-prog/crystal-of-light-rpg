@@ -721,21 +721,13 @@ class Game {
     return `<div id="battle-screen">
       <div class="battle-env ${bgClass}" id="battle-env">
 
-        <!-- Enemy -->
+        <!-- Party sprites (CT-style, left side) -->
+        <div class="battle-party-area">${this._renderPartyBattleSprites()}</div>
+
+        <!-- Enemy (right side) -->
         <div class="battle-enemy" id="battle-enemy">
           ${spriteHtml}
           <div class="enemy-shadow"></div>
-        </div>
-
-        <!-- Hero sprite (DQ7 shows party in lower right) -->
-        <div class="battle-hero-sprite">
-          <div class="hero-figure">
-            <div class="hero-head"></div>
-            <div class="hero-body"></div>
-            <div class="hero-legs"></div>
-            <div class="hero-sword"></div>
-          </div>
-          <div class="battle-hero-shadow" style="width:36px;height:6px;background:rgba(0,0,0,0.45);border-radius:50%;margin:0 auto;filter:blur(3px)"></div>
         </div>
 
         <!-- Enemy nameplate (top-left) -->
@@ -797,6 +789,49 @@ class Game {
     return html;
   }
 
+  _renderPartyBattleSprites() {
+    const p = this.player;
+    const pAlive = p.hp > 0;
+
+    // Hero slot
+    let html = `
+      <div class="bp-slot${pAlive ? '' : ' bp-dead'}" id="bp-hero">
+        <div class="bp-figure-wrap">
+          <div class="bp-hero-fig">
+            <div class="bp-hero-body"></div>
+            <div class="bp-hero-belt"></div>
+            <div class="bp-hero-legs"></div>
+            <div class="bp-hero-sword"></div>
+          </div>
+        </div>
+        <div class="bp-shadow"></div>
+        <span class="bp-name-lbl">${p.name}</span>
+        <span class="bp-hp-lbl">${pAlive ? p.hp : 'KO'}</span>
+      </div>`;
+
+    // Party members
+    this.party.forEach(id => {
+      const pm = this.partyData[id];
+      if (!pm) return;
+      const alive = pm.alive && pm.hp > 0;
+      const figureInner = id === 'erina'
+        ? `<div class="bp-erina-body"></div><div class="bp-erina-staff"></div>`
+        : id === 'gard'
+        ? `<div class="bp-gard-body"></div><div class="bp-gard-shield"></div><div class="bp-gard-legs"></div>`
+        : `<div class="bp-luna-body"></div><div class="bp-luna-cross">+</div><div class="bp-luna-staff"></div>`;
+      html += `
+        <div class="bp-slot${alive ? '' : ' bp-dead'}" id="bp-${id}">
+          <div class="bp-figure-wrap">
+            <div class="bp-${id}-fig">${figureInner}</div>
+          </div>
+          <div class="bp-shadow"></div>
+          <span class="bp-name-lbl">${pm.name}</span>
+          <span class="bp-hp-lbl">${alive ? pm.hp : 'KO'}</span>
+        </div>`;
+    });
+    return html;
+  }
+
   renderSubMenu() {
     if (this.subMenu === 'magic') {
       const rows = this.player.spells.map(s => {
@@ -830,14 +865,34 @@ class Game {
 
   cmdAttack() {
     musicEngine.sfx('attack');
-    const m = this.battle.monster;
-    const dmg = this.dmg(this.getATK(), m.def);
-    m.hp -= dmg;
-    this.addBattleLog(`${this.player.name} の攻撃！ ${m.name} に ${dmg} のダメージ！`);
-    this.showDmgNum(dmg, 'enemy');
-    this.checkMonsterPhase2();
-    if (m.hp <= 0) { m.hp = 0; this.winBattle(); return; }
-    this.monsterTurn();
+    // Trigger hero attack animation
+    const heroSlot = document.getElementById('bp-hero');
+    if (heroSlot) {
+      heroSlot.classList.add('bp-attacking');
+      setTimeout(() => heroSlot.classList.remove('bp-attacking'), 520);
+    }
+    // Apply damage mid-animation
+    setTimeout(() => {
+      const m = this.battle.monster;
+      const dmg = this.dmg(this.getATK(), m.def);
+      m.hp -= dmg;
+      this.addBattleLog(`${this.player.name} の攻撃！ ${m.name} に ${dmg} のダメージ！`);
+      this.showDmgNum(dmg, 'enemy');
+      // Flash enemy
+      requestAnimationFrame(() => {
+        const enemy = document.getElementById('battle-enemy');
+        if (enemy) {
+          const f = document.createElement('div');
+          f.style.cssText = 'position:absolute;top:-10px;left:-10px;right:-10px;bottom:-10px;background:rgba(255,255,255,0.75);border-radius:50%;pointer-events:none;animation:encounterFlash 0.2s ease-out forwards;z-index:10';
+          enemy.style.position = 'relative';
+          enemy.appendChild(f);
+          setTimeout(() => f.remove(), 220);
+        }
+      });
+      this.checkMonsterPhase2();
+      if (m.hp <= 0) { m.hp = 0; this.winBattle(); return; }
+      this.monsterTurn();
+    }, 260);
   }
 
   cmdMagic() { musicEngine.sfx('cursor'); this.subMenu = 'magic'; this.render(); }
@@ -1232,8 +1287,11 @@ class Game {
 
   shakeHero() {
     setTimeout(() => {
-      const el = document.querySelector('.battle-hero');
-      if (el) { el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 350); }
+      const heroSlot = document.getElementById('bp-hero');
+      if (heroSlot) {
+        heroSlot.classList.add('bp-hurting');
+        setTimeout(() => heroSlot.classList.remove('bp-hurting'), 320);
+      }
     }, 50);
   }
 
@@ -1244,7 +1302,7 @@ class Game {
       const el = document.createElement('div');
       el.className = `damage-number ${target === 'enemy' ? 'enemy-dmg' : 'player-dmg'}`;
       el.textContent = dmg;
-      el.style.left = target === 'enemy' ? '28%' : '65%';
+      el.style.left = target === 'enemy' ? '55%' : '18%';
       el.style.top = '40%';
       scene.appendChild(el);
       setTimeout(() => el.remove(), 900);
