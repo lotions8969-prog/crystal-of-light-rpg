@@ -1387,7 +1387,7 @@ class TownRenderer {
     ctx.fillStyle = '#c8e8f8'; ctx.fillRect(x+8, y+34, w-16, 36);
     // Items visible in window
     ctx.fillStyle = '#c89028'; ctx.fillRect(x+16, y+46, 19, 22); // barrel
-    ctx.fillStyle = '#b07820'; ctx.beginPath(); ctx.ellipse(x+25.5,y+46,9.5,4,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#b07820'; ctx.save(); ctx.scale(1, 0.42); ctx.beginPath(); ctx.arc(x+25.5,(y+46)/0.42,9.5,0,Math.PI*2); ctx.fill(); ctx.restore();
     ctx.fillStyle = '#8a5c20'; ctx.fillRect(x+w-50, y+46, 24, 22); // crate
     ctx.fillStyle = '#7a4c18'; ctx.fillRect(x+w-50, y+46, 24, 5);
     this._door(x+w/2-16, y+h-46, 32, 46);
@@ -1670,13 +1670,14 @@ class Game {
     const ctx = cvs.getContext('2d');
     const W = 640, H = 200;
     let frame = 0;
+    const br = new BattleRenderer();
+    br.canvas = cvs; br.ctx = ctx; br.W = W; br.H = H;
     const tick = () => {
       if (!document.getElementById('title-canvas')) return; // stop if navigated away
       frame++;
       ctx.clearRect(0, 0, W, H);
       // Draw four party members on the title screen
-      const br = new BattleRenderer();
-      br.frame = frame; br.canvas = cvs; br.ctx = ctx; br.W = W; br.H = H;
+      br.frame = frame;
       // Hero
       ctx.save(); ctx.translate(W*0.25, H*0.92 + Math.sin(frame*0.04)*4); br._c_hero(ctx, 3.2); ctx.restore();
       // Erina
@@ -1793,7 +1794,7 @@ class Game {
     const area = this.areas['village'];
     return `<div id="town-screen">
       <!-- Canvas-drawn town background (TownRenderer mounts here) -->
-      <div id="town-canvas-target" style="position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden"></div>
+      <div id="town-canvas-target" style="position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;pointer-events:none"></div>
 
       <div class="town-name-panel">${area.name}</div>
       <div class="town-elder-msg">長老：「勇気をもって旅立て、若者よ。」</div>
