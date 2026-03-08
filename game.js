@@ -91,14 +91,14 @@ class BattleRenderer {
       else this._drawSpellFx(this.spellFx.type, t);
     }
 
-    // Draw party members — CT-style perspective arrangement
-    // Each slot: x/y = feet position on canvas, sc = pixel scale
+    // Draw party members — CT-style: SMALL characters left side, BIG enemy right side
+    // Characters at ~20-25% of canvas height (CT proportions)
     const members = this._members(g);
     const slots = [
-      { x: W*0.22, y: H*0.96, sc: 4.2 },   // hero  — front center-left
-      { x: W*0.07, y: H*0.84, sc: 3.5 },   // erina — behind far left
-      { x: W*0.37, y: H*0.92, sc: 4.4 },   // gard  — front right
-      { x: W*0.17, y: H*0.76, sc: 3.2 },   // luna  — far back
+      { x: W*0.13, y: H*0.90, sc: 2.2 },   // hero  — front center
+      { x: W*0.04, y: H*0.80, sc: 1.9 },   // erina — back left
+      { x: W*0.22, y: H*0.86, sc: 2.3 },   // gard  — front right
+      { x: W*0.10, y: H*0.73, sc: 1.8 },   // luna  — far back
     ];
     members.forEach((m, i) => {
       const sl = slots[i]; if (!sl) return;
@@ -580,7 +580,7 @@ class BattleRenderer {
   // ── CHARACTER DRAWINGS ────────────────────────────────────
   // All drawn with feet at (0,0), extending upward. Scale applied externally.
 
-  _c_hero(ctx, scale = 4.2) {
+  _c_hero(ctx, scale = 2.2) {
     // Blue plate armor hero
     ctx.save(); ctx.scale(scale, scale);
     // --- Boots ---
@@ -627,7 +627,7 @@ class BattleRenderer {
     ctx.restore();
   }
 
-  _c_erina(ctx, scale = 3.5) {
+  _c_erina(ctx, scale = 1.9) {
     // Purple mage, witch hat, staff
     ctx.save(); ctx.scale(scale, scale);
     // --- Robe bottom ---
@@ -674,7 +674,7 @@ class BattleRenderer {
     ctx.restore();
   }
 
-  _c_gard(ctx, scale = 4.4) {
+  _c_gard(ctx, scale = 2.3) {
     // Heavy plate warrior, shield left, sword right
     ctx.save(); ctx.scale(scale, scale);
     // --- Greaves/boots ---
@@ -727,7 +727,7 @@ class BattleRenderer {
     ctx.restore();
   }
 
-  _c_luna(ctx, scale = 3.2) {
+  _c_luna(ctx, scale = 1.8) {
     // White/teal oracle healer, moon staff
     ctx.save(); ctx.scale(scale, scale);
     // --- Robe ---
@@ -1150,6 +1150,338 @@ class DungeonRenderer {
 
 let dungeonRenderer = null;
 
+// ============================================================
+//  TownRenderer — Canvas-based SNES-style town with 3D buildings
+// ============================================================
+class TownRenderer {
+  constructor() {
+    this.canvas = null;
+    this.ctx    = null;
+    this.raf    = null;
+    this.frame  = 0;
+    this.W = 640;
+    this.H = 392;
+    this.npcs = [
+      { x: 200, y: 312, vx: 0.28,  animT: 0,  color: '#d04020' },
+      { x: 440, y: 308, vx: -0.22, animT: 45, color: '#2060a0' },
+      { x: 315, y: 324, vx: 0.18,  animT: 20, color: '#208840' },
+    ];
+  }
+
+  mount(el) {
+    if (this.canvas) this.canvas.remove();
+    this.canvas = document.createElement('canvas');
+    this.canvas.width  = this.W;
+    this.canvas.height = this.H;
+    this.canvas.style.cssText =
+      'position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;' +
+      'image-rendering:pixelated;image-rendering:crisp-edges;pointer-events:none';
+    el.prepend(this.canvas);
+    this.ctx = this.canvas.getContext('2d');
+  }
+
+  start() {
+    this.stop();
+    const loop = () => {
+      this.frame++;
+      if (this.ctx) this._draw();
+      this.raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+
+  stop() {
+    if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+    if (this.canvas) { this.canvas.remove(); this.canvas = null; this.ctx = null; }
+  }
+
+  _draw() {
+    const { ctx, W, H } = this;
+    ctx.clearRect(0, 0, W, H);
+    this._sky();
+    this._hills();
+    this._ground();
+    this._path();
+    // Back-row trees
+    this._tree(38,  268, 50, 0.64);
+    this._tree(132, 260, 44, 0.58);
+    this._tree(510, 263, 46, 0.60);
+    this._tree(600, 270, 52, 0.66);
+    // Buildings (front to back order irrelevant here, left → center → right)
+    this._inn(55, 218);
+    this._shop(232, 204);
+    this._church(450, 210);
+    // Mid-row trees flanking the path
+    this._tree(188, 308, 34, 0.44);
+    this._tree(398, 312, 32, 0.42);
+    // NPCs
+    this._npcs();
+    // Foreground fringe
+    this._fringe();
+  }
+
+  _sky() {
+    const { ctx, W, H, frame } = this;
+    const sk = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+    sk.addColorStop(0,    '#061848');
+    sk.addColorStop(0.45, '#1256b4');
+    sk.addColorStop(0.78, '#3484cc');
+    sk.addColorStop(1,    '#6ab0e8');
+    ctx.fillStyle = sk; ctx.fillRect(0, 0, W, H * 0.55);
+    // Horizon warmth
+    const hg = ctx.createLinearGradient(0, H*0.42, 0, H*0.56);
+    hg.addColorStop(0, 'transparent'); hg.addColorStop(0.5, 'rgba(210,160,70,0.22)'); hg.addColorStop(1, 'transparent');
+    ctx.fillStyle = hg; ctx.fillRect(0, H*0.42, W, H*0.14);
+    // Clouds
+    [[0.09,0.09,46,0.13],[0.36,0.06,38,0.09],[0.61,0.12,42,0.11],[0.84,0.08,30,0.07]].forEach(([cx,cy,r,spd],i) => {
+      const ox = ((cx*W + frame*spd) % (W+120)) - 60;
+      ctx.fillStyle = 'rgba(240,248,255,0.9)';
+      [[0,0,r],[r*0.7,0,r*0.62],[-r*0.55,r*0.22,r*0.52],[r*0.26,-r*0.3,r*0.46]].forEach(([dx,dy,rd]) => {
+        ctx.beginPath(); ctx.arc(ox+dx, cy*H+dy, rd, 0, Math.PI*2); ctx.fill();
+      });
+    });
+  }
+
+  _hills() {
+    const { ctx, W, H } = this;
+    // Far mountains
+    ctx.fillStyle = '#1a4e8c';
+    ctx.beginPath(); ctx.moveTo(0, H*0.52);
+    [[0,.48],[.08,.40],[.16,.44],[.25,.36],[.34,.42],[.43,.34],[.52,.41],[.61,.32],[.70,.39],[.79,.35],[.88,.43],[.96,.38],[1,.44]].forEach(([x,y]) => ctx.lineTo(x*W, y*H));
+    ctx.lineTo(W,H*0.52); ctx.closePath(); ctx.fill();
+    // Near hills
+    ctx.fillStyle = '#287028';
+    ctx.beginPath(); ctx.moveTo(0, H*0.57);
+    [[0,.55],[.12,.49],[.26,.53],[.39,.47],[.51,.51],[.63,.45],[.76,.51],[.89,.48],[1,.53]].forEach(([x,y]) => ctx.lineTo(x*W, y*H));
+    ctx.lineTo(W,H*0.57); ctx.closePath(); ctx.fill();
+  }
+
+  _ground() {
+    const { ctx, W, H } = this;
+    const g = ctx.createLinearGradient(0, H*0.54, 0, H);
+    g.addColorStop(0,   '#2c7828'); g.addColorStop(0.22, '#246820');
+    g.addColorStop(0.5, '#1c5418'); g.addColorStop(0.8, '#143c10');
+    g.addColorStop(1,   '#0c2808');
+    ctx.fillStyle = g; ctx.fillRect(0, H*0.54, W, H*0.46);
+    // Depth shading
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.beginPath(); ctx.moveTo(0,H*0.78); ctx.lineTo(W*0.28,H*0.68); ctx.lineTo(W*0.72,H*0.68); ctx.lineTo(W,H*0.78); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  }
+
+  _path() {
+    const { ctx, W, H } = this;
+    const cx = W * 0.5;
+    // Dirt base
+    ctx.fillStyle = '#7a6640';
+    ctx.beginPath(); ctx.moveTo(cx-40,H*0.57); ctx.lineTo(cx+40,H*0.57); ctx.lineTo(cx+130,H); ctx.lineTo(cx-130,H); ctx.closePath(); ctx.fill();
+    // Lighter center
+    ctx.fillStyle = '#8c7850';
+    ctx.beginPath(); ctx.moveTo(cx-20,H*0.57); ctx.lineTo(cx+20,H*0.57); ctx.lineTo(cx+76,H); ctx.lineTo(cx-76,H); ctx.closePath(); ctx.fill();
+    // Stone tiles
+    ctx.strokeStyle = 'rgba(100,82,50,0.45)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 8; i++) {
+      const fy = H*(0.575+i*0.06); const fw = 14+i*16;
+      ctx.beginPath(); ctx.moveTo(cx-fw,fy); ctx.lineTo(cx+fw,fy); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(cx-40,H*0.57); ctx.lineTo(cx-130,H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+40,H*0.57); ctx.lineTo(cx+130,H); ctx.stroke();
+    // Dashes
+    for (let i = 0; i < 7; i++) {
+      const fy = H*(0.585+i*0.06); const fw = 6+i*7;
+      ctx.fillStyle = 'rgba(210,188,110,0.7)'; ctx.fillRect(cx-fw/2, fy, fw, 5+i);
+    }
+  }
+
+  // ── 3D BUILDING HELPERS ─────────────────────────────────────
+  // Draws a building with: front wall, visible side wall, 3D angled roof + peak
+  _buildingBase(x, y, w, h, wallCol, sideCol, roofCol, roofDark) {
+    const ctx = this.ctx;
+    const side = 18, slope = 52;
+    // Side face (right)
+    ctx.fillStyle = sideCol;
+    ctx.beginPath(); ctx.moveTo(x+w,y+12); ctx.lineTo(x+w+side,y+20); ctx.lineTo(x+w+side,y+h+side*0.45); ctx.lineTo(x+w,y+h); ctx.closePath(); ctx.fill();
+    // Front wall
+    ctx.fillStyle = wallCol;
+    ctx.fillRect(x, y+12, w, h);
+    // Gradient on front wall for depth
+    const wg = ctx.createLinearGradient(x, y+12, x+w, y+12);
+    wg.addColorStop(0, 'rgba(255,255,255,0.14)'); wg.addColorStop(0.5, 'rgba(255,255,255,0.04)'); wg.addColorStop(1, 'rgba(0,0,0,0.2)');
+    ctx.fillStyle = wg; ctx.fillRect(x, y+12, w, h);
+    // Roof eave (trapezoid showing top of roof from slight above)
+    ctx.fillStyle = roofDark;
+    ctx.beginPath(); ctx.moveTo(x-8,y+12); ctx.lineTo(x+w+8,y+12); ctx.lineTo(x+w+side+8,y+20); ctx.lineTo(x-8,y+20); ctx.closePath(); ctx.fill();
+    // Roof main face (triangle)
+    ctx.fillStyle = roofCol;
+    ctx.beginPath(); ctx.moveTo(x-10,y+12); ctx.lineTo(x+w/2,y-slope); ctx.lineTo(x+w+side+10,y+12); ctx.closePath(); ctx.fill();
+    // Roof highlight left
+    ctx.fillStyle = 'rgba(255,200,150,0.2)';
+    ctx.beginPath(); ctx.moveTo(x-10,y+12); ctx.lineTo(x+w/2,y-slope); ctx.lineTo(x+w/2+2,y-slope); ctx.lineTo(x-8,y+12); ctx.closePath(); ctx.fill();
+    // Roof ridge line
+    ctx.strokeStyle = roofDark; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x-10,y+12); ctx.lineTo(x+w+side+10,y+12); ctx.stroke();
+    // Foundation
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x-2, y+h+1, w+side+3, 6);
+  }
+
+  _window(x, y, w, h, glassCol) {
+    const ctx = this.ctx;
+    const gg = ctx.createRadialGradient(x+w/2,y+h/2,2,x+w/2,y+h/2,Math.max(w,h)*1.1);
+    gg.addColorStop(0,'rgba(255,230,120,0.5)'); gg.addColorStop(1,'transparent');
+    ctx.fillStyle = gg; ctx.fillRect(x-10,y-10,w+20,h+20);
+    ctx.fillStyle = '#7a5c30'; ctx.fillRect(x-3,y-3,w+6,h+6);
+    ctx.fillStyle = glassCol; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle = '#7a5c30'; ctx.fillRect(x+w/2-1,y,2,h); ctx.fillRect(x,y+h/2-1,w,2);
+  }
+
+  _door(x, y, w, h) {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#3c2010';
+    ctx.beginPath(); ctx.moveTo(x,y+h); ctx.lineTo(x,y+h-h*0.55); ctx.quadraticCurveTo(x,y,x+w/2,y); ctx.quadraticCurveTo(x+w,y,x+w,y+h-h*0.55); ctx.lineTo(x+w,y+h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c89820'; ctx.beginPath(); ctx.arc(x+w*0.65, y+h*0.52, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+
+  _sign(x, y, text) {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#7a4c20'; ctx.fillRect(x-28, y, 56, 15);
+    ctx.strokeStyle = '#5a3410'; ctx.lineWidth = 1; ctx.strokeRect(x-28,y,56,15);
+    ctx.fillStyle = '#f0c840'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y+8);
+  }
+
+  // ── INN ────────────────────────────────────────────────────
+  _inn(x, y) {
+    const ctx = this.ctx;
+    const { frame } = this;
+    const w = 116, h = 94;
+    this._buildingBase(x, y, w, h, '#c8a464', '#906830', '#8c2c18', '#6a1c08');
+    // Chimney
+    ctx.fillStyle = '#604828'; ctx.fillRect(x+w-30, y-40, 17, 32);
+    ctx.fillStyle = '#503818'; ctx.fillRect(x+w-33, y-43, 23, 7);
+    // Smoke
+    for (let i = 0; i < 4; i++) {
+      const sa = 0.2 - i*0.035 + Math.sin(frame*0.05+i*1.8)*0.04;
+      const sx = x+w-22 + Math.sin(frame*0.04+i*1.4)*7;
+      const sy = y-48 - i*11 - Math.sin(frame*0.06+i)*4;
+      ctx.fillStyle = `rgba(200,190,175,${sa})`; ctx.beginPath(); ctx.arc(sx,sy,4+i*2.5,0,Math.PI*2); ctx.fill();
+    }
+    this._window(x+10, y+28, 28, 26, '#ffe898');
+    this._window(x+w-36, y+28, 28, 26, '#ffe898');
+    this._door(x+w/2-14, y+h-44, 28, 44);
+    this._sign(x+w/2, y+16, '宿屋');
+  }
+
+  // ── SHOP ───────────────────────────────────────────────────
+  _shop(x, y) {
+    const ctx = this.ctx;
+    const w = 136, h = 88;
+    this._buildingBase(x, y, w, h, '#b07a44', '#7a5228', '#782010', '#5a1408');
+    // Awning
+    ctx.fillStyle = '#881c10';
+    ctx.beginPath(); ctx.moveTo(x-8,y+12); ctx.lineTo(x+w+8,y+12); ctx.lineTo(x+w+8,y+28); ctx.lineTo(x-8,y+28); ctx.closePath(); ctx.fill();
+    for (let s = 0; s < 9; s++) {
+      ctx.fillStyle = s%2===0?'rgba(255,90,40,0.38)':'rgba(255,210,60,0.3)'; ctx.fillRect(x-8+s*17.2, y+12, 17.2, 16);
+    }
+    ctx.strokeStyle='rgba(100,20,0,0.55)'; ctx.lineWidth=1.5; ctx.strokeRect(x-8,y+12,w+16,16);
+    // Large display window
+    ctx.fillStyle = '#7a5428'; ctx.fillRect(x+6, y+32, w-12, 40);
+    ctx.fillStyle = '#c8e8f8'; ctx.fillRect(x+8, y+34, w-16, 36);
+    // Items visible in window
+    ctx.fillStyle = '#c89028'; ctx.fillRect(x+16, y+46, 19, 22); // barrel
+    ctx.fillStyle = '#b07820'; ctx.beginPath(); ctx.ellipse(x+25.5,y+46,9.5,4,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#8a5c20'; ctx.fillRect(x+w-50, y+46, 24, 22); // crate
+    ctx.fillStyle = '#7a4c18'; ctx.fillRect(x+w-50, y+46, 24, 5);
+    this._door(x+w/2-16, y+h-46, 32, 46);
+    this._sign(x+w/2, y+16, '道具屋');
+  }
+
+  // ── CHURCH ─────────────────────────────────────────────────
+  _church(x, y) {
+    const ctx = this.ctx;
+    const w = 106, h = 100;
+    this._buildingBase(x, y, w, h, '#9098ac', '#6870a0', '#686e7c', '#484e58');
+    // Stone block texture
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 5; c++) {
+        const shade = (r+c)%2===0?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.09)';
+        ctx.fillStyle = shade; ctx.fillRect(x+c*23+(r%2)*11.5, y+12+r*15, 21, 13);
+      }
+    }
+    // Cross (flag area, above roof)
+    ctx.fillStyle = '#887228'; ctx.fillRect(x+w/2-1.5, y-96, 3, 46);
+    ctx.fillStyle = '#f0d020';
+    ctx.fillRect(x+w/2-10, y-82, 20, 7);
+    ctx.fillRect(x+w/2-3.5, y-98, 7, 28);
+    // Blue windows
+    this._window(x+10, y+30, 22, 24, '#a0c8f8');
+    this._window(x+w-30, y+30, 22, 24, '#a0c8f8');
+    this._door(x+w/2-13, y+h-44, 26, 44);
+  }
+
+  // ── TREE ───────────────────────────────────────────────────
+  _tree(cx, baseY, trunkH, scale) {
+    const ctx = this.ctx;
+    const tW = 8*scale, tH = trunkH*scale;
+    const topR = 30*scale;
+    ctx.fillStyle = '#5c3818'; ctx.fillRect(cx-tW/2, baseY-tH, tW, tH+4);
+    ctx.fillStyle = '#3c2410'; ctx.fillRect(cx+tW/4, baseY-tH, tW/4, tH);
+    // Shadow underside of foliage
+    ctx.fillStyle = '#183c0e'; ctx.beginPath(); ctx.arc(cx, baseY-tH-topR*0.5, topR*1.08, 0, Math.PI*2); ctx.fill();
+    // Main foliage
+    ctx.fillStyle = '#2a7018'; ctx.beginPath(); ctx.arc(cx, baseY-tH-topR*0.6, topR, 0, Math.PI*2); ctx.fill();
+    // Lighter patches
+    ctx.fillStyle = '#3c9428'; ctx.beginPath(); ctx.arc(cx-topR*0.28, baseY-tH-topR*0.72, topR*0.46, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#3c9428'; ctx.beginPath(); ctx.arc(cx+topR*0.18, baseY-tH-topR*0.95, topR*0.36, 0, Math.PI*2); ctx.fill();
+    // Specular
+    ctx.fillStyle = 'rgba(100,220,60,0.22)'; ctx.beginPath(); ctx.arc(cx-topR*0.24, baseY-tH-topR*1.08, topR*0.24, 0, Math.PI*2); ctx.fill();
+  }
+
+  // ── NPCS ───────────────────────────────────────────────────
+  _npcs() {
+    const { W } = this;
+    this.npcs.forEach(n => {
+      n.x += n.vx; n.animT++;
+      if (n.x > W*0.73 || n.x < W*0.26) n.vx = -n.vx;
+      this._npcFigure(n.x, n.y, n.animT, n.vx > 0 ? 1 : -1, n.color);
+    });
+  }
+
+  _npcFigure(x, y, t, dir, bodyColor) {
+    const ctx = this.ctx;
+    const step = Math.sin(t * 0.2) * 2.5;
+    ctx.save(); ctx.translate(x, y); if (dir < 0) ctx.scale(-1, 1);
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.save(); ctx.scale(1,0.22); ctx.beginPath(); ctx.arc(0,0,7,0,Math.PI*2); ctx.fill(); ctx.restore();
+    // Legs
+    ctx.fillStyle = '#2840a0';
+    ctx.fillRect(-4, 4+step, 4, 8); ctx.fillRect(0, 4-step, 4, 8);
+    // Body
+    ctx.fillStyle = bodyColor; ctx.fillRect(-5, -9, 10, 15);
+    // Arms
+    ctx.fillRect(-8, -8, 3, 9); ctx.fillRect(5, -8, 3, 9);
+    // Head
+    ctx.fillStyle = '#f0c888'; ctx.fillRect(-4, -19, 9, 11);
+    // Hair
+    ctx.fillStyle = '#3c2008'; ctx.fillRect(-4, -21, 9, 4);
+    // Eyes
+    ctx.fillStyle = '#000'; ctx.fillRect(-2, -16, 2, 2); ctx.fillRect(2, -16, 2, 2);
+    ctx.restore();
+  }
+
+  // ── FOREGROUND ─────────────────────────────────────────────
+  _fringe() {
+    const { ctx, W, H, frame } = this;
+    ctx.fillStyle = '#1e5812';
+    ctx.beginPath(); ctx.moveTo(0, H*0.88);
+    for (let gx = 0; gx < W; gx += 9) {
+      ctx.lineTo(gx, H*0.88 - 5 - Math.sin(gx*0.08+frame*0.025)*3);
+      ctx.lineTo(gx+4.5, H*0.88+2);
+    }
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+  }
+}
+
+let townRenderer = null;
+
 class Game {
   constructor() {
     this.screen = 'TITLE';
@@ -1261,16 +1593,19 @@ class Game {
   render() {
     const c = $('game-container');
     // Stop renderers when leaving their screens
-    if (this.screen !== 'BATTLE' && battleRenderer) {
-      battleRenderer.stop(); battleRenderer = null;
-    }
-    if (this.screen !== 'DUNGEON' && dungeonRenderer) {
-      dungeonRenderer.stop(); dungeonRenderer = null;
-    }
+    if (this.screen !== 'BATTLE' && battleRenderer) { battleRenderer.stop(); battleRenderer = null; }
+    if (this.screen !== 'DUNGEON' && dungeonRenderer) { dungeonRenderer.stop(); dungeonRenderer = null; }
+    if (this.screen !== 'TOWN' && townRenderer) { townRenderer.stop(); townRenderer = null; }
     switch (this.screen) {
       case 'TITLE':   c.innerHTML = this.renderTitle();  break;
       case 'MAP':     c.innerHTML = this.renderMap();    break;
-      case 'TOWN':    c.innerHTML = this.renderTown();   break;
+      case 'TOWN':
+        c.innerHTML = this.renderTown();
+        requestAnimationFrame(() => {
+          const tw = document.getElementById('town-canvas-target');
+          if (tw) { townRenderer = new TownRenderer(); townRenderer.mount(tw); townRenderer.start(); }
+        });
+        break;
       case 'DUNGEON':
         c.innerHTML = this.renderDungeon();
         requestAnimationFrame(() => {
@@ -1457,57 +1792,8 @@ class Game {
   renderTown() {
     const area = this.areas['village'];
     return `<div id="town-screen">
-      <div class="town-sky"></div>
-      <div class="town-cloud cloud-1"></div>
-      <div class="town-cloud cloud-2"></div>
-      <div class="town-ground"></div>
-      <div class="town-road"></div>
-
-      <!-- 宿屋 -->
-      <div style="position:absolute;bottom:47%;left:48px;z-index:5">
-        <div style="position:relative;width:108px;height:88px;background:#c8a86a;border:2px solid #8a6040">
-          <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:60px solid transparent;border-right:60px solid transparent;border-bottom:50px solid #8a3a1a"></div>
-          <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:24px;height:32px;background:#6a4020;border-radius:40% 40% 0 0/60% 60% 0 0"></div>
-          <div style="position:absolute;top:18px;left:10px;width:22px;height:22px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.6)"></div>
-          <div style="position:absolute;top:18px;right:10px;width:22px;height:22px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.6)"></div>
-          <div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:9px;color:#ffd700;white-space:nowrap;text-shadow:1px 1px 0 #000">宿 屋</div>
-        </div>
-      </div>
-
-      <!-- 道具屋 -->
-      <div style="position:absolute;bottom:47%;left:238px;z-index:5">
-        <div style="position:relative;width:128px;height:78px;background:#a87850;border:2px solid #6a4020">
-          <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:70px solid transparent;border-right:70px solid transparent;border-bottom:44px solid #6a3010"></div>
-          <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:30px;height:26px;background:#5a3010;border:1px solid #3a1a00"></div>
-          <div style="position:absolute;top:14px;left:8px;width:34px;height:24px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.5)"></div>
-          <div style="position:absolute;top:14px;right:8px;width:34px;height:24px;background:#ffeaa0;border:1px solid #8a6040;box-shadow:0 0 5px rgba(255,220,100,0.5)"></div>
-          <div style="position:absolute;top:3px;left:50%;transform:translateX(-50%);font-size:9px;color:#ffd700;white-space:nowrap;text-shadow:1px 1px 0 #000">道 具 屋</div>
-        </div>
-      </div>
-
-      <!-- 教会 -->
-      <div style="position:absolute;bottom:47%;left:448px;z-index:5">
-        <div style="position:relative;width:90px;height:98px;background:#e0d8c0;border:2px solid #a09070">
-          <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);width:0;height:0;border-left:50px solid transparent;border-right:50px solid transparent;border-bottom:54px solid #888060"></div>
-          <div style="position:absolute;bottom:calc(100% + 54px);left:50%;transform:translateX(-55%);width:7px;height:18px;background:#ffd700"></div>
-          <div style="position:absolute;bottom:calc(100% + 60px);left:50%;transform:translateX(-55%) translateX(-6px);width:20px;height:6px;background:#ffd700"></div>
-          <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:22px;height:34px;background:#6a4020;border-radius:40% 40% 0 0/60% 60% 0 0"></div>
-          <div style="position:absolute;top:24px;left:8px;width:18px;height:22px;background:#a0d0ff;border:1px solid #808090;box-shadow:0 0 4px rgba(150,200,255,0.5)"></div>
-          <div style="position:absolute;top:24px;right:8px;width:18px;height:22px;background:#a0d0ff;border:1px solid #808090;box-shadow:0 0 4px rgba(150,200,255,0.5)"></div>
-        </div>
-      </div>
-
-      <!-- 木 -->
-      <div style="position:absolute;bottom:47%;left:196px;z-index:4">
-        <div style="width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-bottom:42px solid #2a8a18;margin:0 auto"></div>
-        <div style="width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:34px solid #3aaa20;margin:-12px auto 0"></div>
-        <div style="width:12px;height:24px;background:#6a4020;margin:0 auto;border:1px solid #4a2a10"></div>
-      </div>
-      <div style="position:absolute;bottom:47%;left:398px;z-index:4">
-        <div style="width:0;height:0;border-left:18px solid transparent;border-right:18px solid transparent;border-bottom:38px solid #228818;margin:0 auto"></div>
-        <div style="width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:30px solid #2aaa18;margin:-10px auto 0"></div>
-        <div style="width:10px;height:20px;background:#6a4020;margin:0 auto;border:1px solid #4a2a10"></div>
-      </div>
+      <!-- Canvas-drawn town background (TownRenderer mounts here) -->
+      <div id="town-canvas-target" style="position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden"></div>
 
       <div class="town-name-panel">${area.name}</div>
       <div class="town-elder-msg">長老：「勇気をもって旅立て、若者よ。」</div>

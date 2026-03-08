@@ -226,7 +226,7 @@ body {
 /* ══════════════════════════════════════════════════════════
    TOWN SCREEN
 ══════════════════════════════════════════════════════════ */
-#town-screen { width: 100%; height: 100%; position: relative; overflow: hidden; }
+#town-screen { width: 100%; height: 100%; position: relative; overflow: hidden; background: #061848; }
 .town-sky {
   position: absolute; top: 0; left: 0; right: 0; height: 55%;
   background: linear-gradient(180deg, #0c2868 0%, #1850a8 45%, #3880c8 80%, #50a0d8 100%);
@@ -322,13 +322,19 @@ body {
 .battle-env.bg-ruins { background: linear-gradient(180deg, #050400 0%, #100e04 22%, #1a1808 48%, #100e04 70%, #0a0802 100%); }
 @keyframes castleAura { 0% { opacity: 0.5; } 100% { opacity: 1; } }
 
-/* Enemy sprite */
-.battle-enemy { position: absolute; right: 5%; top: 5%; text-align: center; animation: enemyIdle 3s ease-in-out infinite; z-index: 10; }
-@keyframes enemyIdle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+/* Enemy sprite — large, CT-style (dominates right side of battle area) */
+.battle-enemy {
+  position: absolute; right: 3%; top: 2%;
+  text-align: center; animation: enemyIdle 3s ease-in-out infinite; z-index: 10;
+}
+@keyframes enemyIdle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
 .enemy-sprite-wrap { display: inline-block; position: relative; }
-.enemy-sprite-wrap svg { display: block; filter: drop-shadow(0 0 8px rgba(255,255,255,0.06)) drop-shadow(0 12px 22px rgba(0,0,0,0.9)); }
-.enemy-sprite-wrap.boss-sprite { transform: scale(1.22); transform-origin: bottom center; }
-.enemy-shadow { width: 62px; height: 9px; background: rgba(0,0,0,0.55); border-radius: 50%; margin: 2px auto; filter: blur(4px); }
+.enemy-sprite-wrap svg {
+  display: block; width: 230px; height: 230px;
+  filter: drop-shadow(0 0 14px rgba(255,255,255,0.08)) drop-shadow(0 16px 28px rgba(0,0,0,0.95));
+}
+.enemy-sprite-wrap.boss-sprite svg { width: 310px; height: 310px; }
+.enemy-shadow { width: 80px; height: 10px; background: rgba(0,0,0,0.6); border-radius: 50%; margin: 4px auto; filter: blur(5px); }
 
 /* Enemy nameplate */
 .enemy-nameplate-top {
