@@ -638,7 +638,7 @@ class BattleRenderer {
     // --- Body ---
     ctx.fillStyle='#7020c0'; ctx.fillRect(-8,-8,16,14);
     ctx.fillStyle='#9040d8'; ctx.fillRect(-2,-8,4,14);
-    ctx.fillStyle='#4a10908'; ctx.fillStyle='#5818a8'; ctx.fillRect(-7,-8,3,8);
+    ctx.fillStyle='#5818a8'; ctx.fillRect(-7,-8,3,8);
     // --- Sleeves ---
     ctx.fillStyle='#6018a8'; ctx.fillRect(-12,-6,6,12); ctx.fillRect(6,-6,6,12);
     ctx.fillStyle='#4a0e88'; ctx.fillRect(-13,-4,5,8); ctx.fillRect(8,-4,5,8);
@@ -1623,8 +1623,7 @@ class Game {
         requestAnimationFrame(() => {
           const env = document.getElementById('battle-env');
           if (env) {
-            if (!battleRenderer) battleRenderer = new BattleRenderer();
-            else battleRenderer.stop();
+            if (battleRenderer) { battleRenderer.stop(); battleRenderer = null; }
             battleRenderer = new BattleRenderer();
             battleRenderer.mount(env);
             battleRenderer.start();
@@ -2138,6 +2137,7 @@ class Game {
 
   initBattle(monsterId, isBoss) {
     const template = GAME_DATA.monsters[monsterId];
+    if (!template) { console.error('Unknown monster:', monsterId); return; }
     const m = { ...template, hp: template.hp, maxHp: template.hp, phase: 1, status: [] };
     this.battle = { monster: m, isBoss, log: [], phase2Shown: false };
     this.battleLog = [`${m.name} が現れた！`];
@@ -2353,6 +2353,7 @@ class Game {
     if (battleRenderer) battleRenderer.triggerAnim('hero', 'attack');
     // Apply damage mid-animation
     setTimeout(() => {
+      if (!this.battle) return;
       const m = this.battle.monster;
       const dmg = this.dmg(this.getATK(), m.def);
       m.hp -= dmg;
@@ -2519,7 +2520,7 @@ class Game {
 
       if (id === 'erina') {
         // Cast offensive spell if MP available
-        const candidates = pm.spells.filter(s => {
+        const candidates = (pm.spells || []).filter(s => {
           const sp = GAME_DATA.spells[s];
           return sp && sp.type === 'magic' && pm.mp >= sp.mpCost;
         });
@@ -2545,7 +2546,7 @@ class Game {
       } else if (id === 'luna') {
         // Heal hero if HP < 50%, otherwise attack
         if (p.hp < p.maxHp * 0.5 && pm.mp >= 5) {
-          const healId = pm.spells.includes('healmore') && pm.mp >= 11 ? 'healmore' : 'heal';
+          const healId = (pm.spells || []).includes('healmore') && pm.mp >= 11 ? 'healmore' : 'heal';
           const sp = GAME_DATA.spells[healId];
           pm.mp -= sp.mpCost;
           const h = rand(sp.heal[0], sp.heal[1]);
@@ -2802,12 +2803,13 @@ class Game {
   // ── LEVEL UP OVERLAY ──────────────────────────────────────
   showLevelUp(msgs, cb) {
     const c = $('game-container');
+    window._levelUpCb = cb;
     const el = document.createElement('div');
     el.id = 'levelup-overlay';
     el.innerHTML = `
       <div class="levelup-title">⭐ レベルアップ！</div>
       <div class="levelup-stats">${msgs.join('<br>')}</div>
-      <button class="btn btn-gold" onclick="this.parentElement.remove();(${cb.toString()})()">OK</button>`;
+      <button class="btn btn-gold" onclick="document.getElementById('levelup-overlay').remove();window._levelUpCb&&window._levelUpCb()">OK</button>`;
     c.appendChild(el);
   }
 
